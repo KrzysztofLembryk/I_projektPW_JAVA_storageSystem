@@ -17,6 +17,7 @@ import cp2023.base.StorageSystem;
 public final class StorageSystemFactory {
     private static boolean isDeviceMapCorrect(Map<DeviceId, Integer> deviceTotalSlots)
     {
+        System.out.println("ciul");
         return true;
     }
     private static boolean isComponentMapCorrect(Map<ComponentId, DeviceId> componentPlacement)
