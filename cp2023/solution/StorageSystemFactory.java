@@ -18,10 +18,11 @@ import cp2023.base.StorageSystem;
 public final class StorageSystemFactory {
     private static void isDeviceMapCorrect(Map<DeviceId, Integer> deviceTotalSlots) throws IllegalArgumentException
     {
-        // we check if any device has 0 capacity, if such device exist we return false
+        // we check if any device has 0 capacity, if such device exist we throw exception
         for(Integer capacity : deviceTotalSlots.values())
             if(capacity == 0)
-                throw new IllegalArgumentException();
+                throw new IllegalArgumentException("StorageSystemFactory - newSystem - areArgsCorrect - " +
+                        "isDeviceMapCorrect - capacity of a device is 0");
     }
     private static void areArgumentsCorrect(Map<DeviceId, Integer> deviceTotalSlots,
                                                Map<ComponentId, DeviceId> componentPlacement) throws IllegalArgumentException
@@ -30,8 +31,8 @@ public final class StorageSystemFactory {
 
         Map<DeviceId, Integer> howManyComponentsOnDevices = new HashMap<>();
 
-        for(DeviceId key : deviceTotalSlots.keySet())
-            howManyComponentsOnDevices.put(key, 0);
+        for(DeviceId deviceID : deviceTotalSlots.keySet())
+            howManyComponentsOnDevices.put(deviceID, 0);
 
         // we count how many components is currently on each device
         for(DeviceId id : componentPlacement.values())
@@ -45,7 +46,8 @@ public final class StorageSystemFactory {
             Integer currentNumberOfDevices = howManyComponentsOnDevices.get(id);
 
             if (currentNumberOfDevices > maxNumberOfDevices)
-                throw new IllegalArgumentException();
+                throw new IllegalArgumentException("StorageSystemFactory - newSystem - areArgsCorrect - " +
+                        "number of components on device exceeds device's limit");
         }
     }
     public static StorageSystem newSystem(
