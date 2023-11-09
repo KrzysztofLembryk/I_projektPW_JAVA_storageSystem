@@ -26,4 +26,12 @@ public class StorageSystem implements cp2023.base.StorageSystem {
     public void execute(ComponentTransfer transfer) throws TransferException {
 
     }
+    protected Map<DeviceId, Integer> getDeviceSlotsMap()
+    {
+        return deviceTotalSlots;
+    }
+    protected Map<ComponentId, DeviceId> getComponentPlacementMap()
+    {
+        return componentInDevicePlacement;
+    }
 }
