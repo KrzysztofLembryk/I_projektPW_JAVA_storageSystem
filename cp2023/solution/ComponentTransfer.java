@@ -18,33 +18,84 @@ public class ComponentTransfer implements cp2023.base.ComponentTransfer {
 
 
     private void isTransferOK() throws DeviceDoesNotExist, ComponentDoesNotNeedTransfer,
-            ComponentAlreadyExists, ComponentDoesNotExist
+            ComponentAlreadyExists, ComponentDoesNotExist, IllegalTransferType
     {
+        Map<DeviceId, Integer> devMap = storageSystem.getDeviceSlotsMap();
+        Map<ComponentId, DeviceId> compInDevMap = storageSystem.getCompPlacementMap();
+
         if(transferType == TypeOfTransfer.ADD)
         {
-            if(!storageSystem.getDeviceSlotsMap().containsKey(destDevId))
+            if(!devMap.containsKey(destDevId))
                 throw new DeviceDoesNotExist(destDevId);
-            if(storageSystem.getCompPlacementMap().containsKey(compId))
+            if(compInDevMap.containsKey(compId))
                 throw new ComponentAlreadyExists(compId);
         }
         else if(transferType == TypeOfTransfer.REMOVE)
         {
-            if(!storageSystem.getDeviceSlotsMap().containsKey(srcDevId))
+            if(!devMap.containsKey(srcDevId))
                 throw new DeviceDoesNotExist(srcDevId);
-            if(!storageSystem.getCompPlacementMap().containsKey(compId))
+            if(!compInDevMap.containsKey(compId) || compInDevMap.get(compId) != srcDevId)
                 throw new ComponentDoesNotExist(compId, srcDevId);
+            // component we want to remove is not in device of given ID
         }
-
+        else if(transferType == TypeOfTransfer.TRANSFER)
+        {
+            if(!devMap.containsKey(srcDevId))
+                throw new DeviceDoesNotExist(srcDevId);
+            if(!devMap.containsKey(destDevId))
+                throw new DeviceDoesNotExist(destDevId);
+            if(!compInDevMap.containsKey(compId) || compInDevMap.get(compId) != srcDevId)
+                throw new ComponentDoesNotExist(compId, srcDevId);
+            if(compInDevMap.get(compId) == destDevId)
+                throw new ComponentDoesNotNeedTransfer(compId, destDevId);
+        }
         else
         {
-
+            throw new IllegalTransferType(compId);
         }
 
     }
+    private void checkTransfer() throws ComponentIsBeingOperatedOn, DeviceDoesNotExist, IllegalTransferType,
+            ComponentDoesNotNeedTransfer, ComponentAlreadyExists, ComponentDoesNotExist, InterruptedException
+    {
+        // PROSTSZA WERSJA Z JEDNYM SEMAPHOREM - NA RAZIE NIE WIEM JAK Z WIELOMA ZROBIC
+        storageSystem.getSemaphoreForTransfer().acquire();
+
+        boolean compIdExist = storageSystem.getCompPlacementMap().containsKey(compId);
+
+        // we check if compID is in map that stores whether given compID is being transfered
+//            if(compIdExist)
+//                storageSystem.getSemaphoreCompTransfered().get(compId).acquire();
+
+        if(!compIdExist)
+        {
+            // if there is no such compID this means we either add new comp
+            // so we have another semaphore for adding components,
+            // we also put (compID, false) to map that checks
+            //storageSystem.getSemaphoreForNewComp().acquire();
+
+            storageSystem.getIsCompBeingTransfered().put(compId, false);
+        }
+
+        if(!storageSystem.getIsCompBeingTransfered().get(compId))
+            storageSystem.getIsCompBeingTransfered().put(compId, true);
+        else
+            throw new ComponentIsBeingOperatedOn(compId);
+
+        isTransferOK();
+
+//            if(compIdExist)
+//                storageSystem.getSemaphoreCompTransfered().get(compId).release();
+//            else
+//                storageSystem.getSemaphoreForNewComp().release();
+
+        storageSystem.getSemaphoreForTransfer().release();
+    }
+
     public ComponentTransfer(TypeOfTransfer type, StorageSystem storSys,
                              ComponentId compId, DeviceId srcDevID,
                              DeviceId destDevID)
-            throws ComponentIsBeingOperatedOn, DeviceDoesNotExist,
+            throws ComponentIsBeingOperatedOn, DeviceDoesNotExist, IllegalTransferType,
                 ComponentDoesNotNeedTransfer, ComponentAlreadyExists, ComponentDoesNotExist
     {
         try
@@ -58,38 +109,7 @@ public class ComponentTransfer implements cp2023.base.ComponentTransfer {
             this.isPerformed = false;
             this.myThread = Thread.currentThread();
 
-            // PROSTSZA WERSJA Z JEDNYM SEMAPHOREM - NA RAZIE NIE WIEM JAK Z WIELOMA ZROBIC
-            storageSystem.getSemaphoreForNewComp().acquire();
-
-            boolean compIdExist = storageSystem.getCompPlacementMap().containsKey(compId);
-
-            // we check if compID is in map that stores whether given compID is being transfered
-//            if(compIdExist)
-//                storageSystem.getSemaphoreCompTransfered().get(compId).acquire();
-
-            if(!compIdExist)
-            {
-                // if there is no such compID this means we either add new comp
-                // so we have another semaphore for adding components,
-                // we also put (compID, false) to map that checks
-                //storageSystem.getSemaphoreForNewComp().acquire();
-
-                storageSystem.getIsCompBeingTransfered().put(compId, false);
-            }
-
-
-            isTransferOK();
-            if(!storageSystem.getIsCompBeingTransfered().get(compId))
-                storageSystem.getIsCompBeingTransfered().put(compId, true);
-            else
-                throw new ComponentIsBeingOperatedOn(compId);
-
-//            if(compIdExist)
-//                storageSystem.getSemaphoreCompTransfered().get(compId).release();
-//            else
-//                storageSystem.getSemaphoreForNewComp().release();
-
-            storageSystem.getSemaphoreForNewComp().release();
+            checkTransfer();
         }
         catch(InterruptedException e)
         {

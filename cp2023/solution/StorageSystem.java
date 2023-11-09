@@ -29,7 +29,7 @@ public class StorageSystem implements cp2023.base.StorageSystem {
     // if given component was being transfered and at that very point it wasnt being transfered
     // so both threads would be able to transfer it
     private Map<ComponentId, Semaphore> semaphoreIsCompBeingTransfered;
-    private Semaphore semaphoreForNewComp;
+    private Semaphore semaphoreForTransfer;
     public StorageSystem(Map<DeviceId, Integer> deviceTotalSlots,
                                 Map<ComponentId, DeviceId> componentPlacement)
     {
@@ -37,7 +37,7 @@ public class StorageSystem implements cp2023.base.StorageSystem {
         this.componentInDevicePlacement = componentPlacement;
         isCompBeingTransfered = new HashMap<>();
         semaphoreIsCompBeingTransfered = new HashMap<>();
-        semaphoreForNewComp = new Semaphore(1, true);
+        semaphoreForTransfer = new Semaphore(1, true);
 
         for(ComponentId compId : componentPlacement.keySet())
         {
@@ -67,8 +67,8 @@ public class StorageSystem implements cp2023.base.StorageSystem {
     {
         return isCompBeingTransfered;
     }
-    protected Semaphore getSemaphoreForNewComp()
+    protected Semaphore getSemaphoreForTransfer()
     {
-        return  semaphoreForNewComp;
+        return semaphoreForTransfer;
     }
 }
