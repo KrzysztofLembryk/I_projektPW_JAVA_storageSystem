@@ -7,7 +7,7 @@ import cp2023.exceptions.*;
 import java.util.Map;
 
 public class ComponentTransfer implements cp2023.base.ComponentTransfer {
-    private final StorageSystem storageSystem;
+    private final StorageSystem storSys;
     private final ComponentId compId;
     private final DeviceId srcDevId;
     private final DeviceId destDevId;
@@ -20,8 +20,8 @@ public class ComponentTransfer implements cp2023.base.ComponentTransfer {
     private void isTransferOK() throws DeviceDoesNotExist, ComponentDoesNotNeedTransfer,
             ComponentAlreadyExists, ComponentDoesNotExist, IllegalTransferType
     {
-        Map<DeviceId, Integer> devMap = storageSystem.getDeviceSlotsMap();
-        Map<ComponentId, DeviceId> compInDevMap = storageSystem.getCompPlacementMap();
+        Map<DeviceId, Integer> devMap = storSys.getDeviceSlotsMap();
+        Map<ComponentId, DeviceId> compInDevMap = storSys.getCompPlacementMap();
 
         if(transferType == TypeOfTransfer.ADD)
         {
@@ -59,9 +59,9 @@ public class ComponentTransfer implements cp2023.base.ComponentTransfer {
             ComponentDoesNotNeedTransfer, ComponentAlreadyExists, ComponentDoesNotExist, InterruptedException
     {
         // PROSTSZA WERSJA Z JEDNYM SEMAPHOREM - NA RAZIE NIE WIEM JAK Z WIELOMA ZROBIC
-        storageSystem.getSemaphoreForTransfer().acquire();
+        storSys.getSemaphoreForTransfer().acquire();
 
-        boolean compIdExist = storageSystem.getCompPlacementMap().containsKey(compId);
+        boolean compIdExist = storSys.getCompPlacementMap().containsKey(compId);
 
         // we check if compID is in map that stores whether given compID is being transfered
 //            if(compIdExist)
@@ -74,11 +74,11 @@ public class ComponentTransfer implements cp2023.base.ComponentTransfer {
             // we also put (compID, false) to map that checks
             //storageSystem.getSemaphoreForNewComp().acquire();
 
-            storageSystem.getIsCompBeingTransfered().put(compId, false);
+            storSys.getIsCompBeingTransfered().put(compId, false);
         }
 
-        if(!storageSystem.getIsCompBeingTransfered().get(compId))
-            storageSystem.getIsCompBeingTransfered().put(compId, true);
+        if(!storSys.getIsCompBeingTransfered().get(compId))
+            storSys.getIsCompBeingTransfered().put(compId, true);
         else
             throw new ComponentIsBeingOperatedOn(compId);
 
@@ -89,7 +89,7 @@ public class ComponentTransfer implements cp2023.base.ComponentTransfer {
 //            else
 //                storageSystem.getSemaphoreForNewComp().release();
 
-        storageSystem.getSemaphoreForTransfer().release();
+        storSys.getSemaphoreForTransfer().release();
     }
 
     public ComponentTransfer(TypeOfTransfer type, StorageSystem storSys,
@@ -100,7 +100,7 @@ public class ComponentTransfer implements cp2023.base.ComponentTransfer {
     {
         try
         {
-            this.storageSystem = storSys;
+            this.storSys = storSys;
             this.transferType = type;
             this.compId = compId;
             this.srcDevId = srcDevID;
@@ -125,7 +125,7 @@ public class ComponentTransfer implements cp2023.base.ComponentTransfer {
     @Override
     public DeviceId getSourceDeviceId()
     {
-        Map<ComponentId, DeviceId> compInDevicePlacement = storageSystem.getCompPlacementMap();
+        Map<ComponentId, DeviceId> compInDevicePlacement = storSys.getCompPlacementMap();
 
         // jesli komponentu nie ma w mapie komponent -> urzadzenie, to znaczy ze dodajemy
         // nowy komponent do systemu
@@ -151,6 +151,6 @@ public class ComponentTransfer implements cp2023.base.ComponentTransfer {
 
         // at the very end of perform method we need to inform system that
         // transfer at given component has ended, and thus we can create another transfer
-        storageSystem.getIsCompBeingTransfered().put(compId, false);
+        storSys.getIsCompBeingTransfered().put(compId, false);
     }
 }
