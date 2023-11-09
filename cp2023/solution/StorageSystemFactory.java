@@ -24,11 +24,19 @@ public final class StorageSystemFactory {
                 throw new IllegalArgumentException("StorageSystemFactory - newSystem - areArgsCorrect - " +
                         "isDeviceMapCorrect - capacity of a device is 0");
     }
-    private static void areArgumentsCorrect(Map<DeviceId, Integer> deviceTotalSlots,
-                                               Map<ComponentId, DeviceId> componentPlacement) throws IllegalArgumentException
+    private static void isComponentMapCorrect(Map<DeviceId, Integer> devTotalSlots,
+                                              Map<ComponentId, DeviceId> compPlacement) throws IllegalArgumentException
     {
-        isDeviceMapCorrect(deviceTotalSlots);
-
+        for(DeviceId devID : compPlacement.values())
+        {
+            if(!devTotalSlots.containsKey(devID))
+                throw new IllegalArgumentException("StorageSystemFactory - newSystem - areArgsCorrect - " +
+                        "isComponentMapCorrect - there exists a component with assigned deviceID that does not exist");
+        }
+    }
+    private static void areThereTooManyComponentsOnDevice(Map<DeviceId, Integer> deviceTotalSlots,
+                                                          Map<ComponentId, DeviceId> componentPlacement) throws IllegalArgumentException
+    {
         Map<DeviceId, Integer> howManyComponentsOnDevices = new HashMap<>();
 
         for(DeviceId deviceID : deviceTotalSlots.keySet())
@@ -49,6 +57,13 @@ public final class StorageSystemFactory {
                 throw new IllegalArgumentException("StorageSystemFactory - newSystem - areArgsCorrect - " +
                         "number of components on device exceeds device's limit");
         }
+    }
+    private static void areArgumentsCorrect(Map<DeviceId, Integer> deviceTotalSlots,
+                                               Map<ComponentId, DeviceId> componentPlacement) throws IllegalArgumentException
+    {
+        isDeviceMapCorrect(deviceTotalSlots);
+        isComponentMapCorrect(deviceTotalSlots, componentPlacement);
+        areThereTooManyComponentsOnDevice(deviceTotalSlots, componentPlacement);
     }
     public static StorageSystem newSystem(
             Map<DeviceId, Integer> deviceTotalSlots,
