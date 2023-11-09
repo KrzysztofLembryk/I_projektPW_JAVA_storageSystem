@@ -23,6 +23,7 @@ public final class StorageSystemFactory {
             if(capacity == 0)
                 throw new IllegalArgumentException("StorageSystemFactory - newSystem - areArgsCorrect - " +
                         "isDeviceMapCorrect - capacity of a device is 0");
+
     }
     private static void isComponentMapCorrect(Map<DeviceId, Integer> devTotalSlots,
                                               Map<ComponentId, DeviceId> compPlacement) throws IllegalArgumentException
