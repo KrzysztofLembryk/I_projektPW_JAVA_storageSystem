@@ -7,12 +7,16 @@ import cp2023.exceptions.TransferException;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 
 public class StorageSystem implements cp2023.base.StorageSystem {
     // deviceTotalSlots - stores info about how many components
     // device of given ID can store (deviceID --> capacity).
     private Map<DeviceId, Integer> deviceTotalSlots;
+
+    // deviceSpacseMap - knows if there are free to use spaces on device or not
+    private Map<DeviceId, DeviceSpaceHandler> deviceSpacesMap= new ConcurrentHashMap<>();
 
     // componentInDevicePlacement - remembers on which device given
     // component is stored.
@@ -38,6 +42,12 @@ public class StorageSystem implements cp2023.base.StorageSystem {
         isCompBeingTransfered = new HashMap<>();
         semaphoreIsCompBeingTransfered = new HashMap<>();
         semaphoreForTransfer = new Semaphore(1, true);
+        deviceSpacesMap = new HashMap<>();
+
+        for(DeviceId devId : deviceTotalSlots.keySet())
+        {
+            deviceSpacesMap.put(devId, new DeviceSpaceHandler(deviceTotalSlots.get(devId)));
+        }
 
         for(ComponentId compId : componentPlacement.keySet())
         {
