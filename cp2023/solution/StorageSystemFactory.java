@@ -26,7 +26,8 @@ public final class StorageSystemFactory {
 
     }
     private static void isComponentMapCorrect(Map<DeviceId, Integer> devTotalSlots,
-                                              Map<ComponentId, DeviceId> compPlacement) throws IllegalArgumentException
+                                              Map<ComponentId, DeviceId> compPlacement)
+            throws IllegalArgumentException
     {
         for(DeviceId devID : compPlacement.values())
         {
@@ -36,7 +37,8 @@ public final class StorageSystemFactory {
         }
     }
     private static void areThereTooManyComponentsOnDevice(Map<DeviceId, Integer> deviceTotalSlots,
-                                                          Map<ComponentId, DeviceId> componentPlacement) throws IllegalArgumentException
+                                                          Map<ComponentId, DeviceId> componentPlacement)
+            throws IllegalArgumentException
     {
         Map<DeviceId, Integer> howManyComponentsOnDevices = new HashMap<>();
 

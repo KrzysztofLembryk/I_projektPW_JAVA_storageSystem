@@ -3,30 +3,46 @@ package cp2023.solution;
 public class DeviceSpaceHandler {
     private Integer size;
     private DevSpacesTypes[] arrOfDevSpaces;
+    private int spacesReserved;
     public DeviceSpaceHandler(Integer size)
     {
         this.size = size;
+        this.spacesReserved = 0;
         arrOfDevSpaces = new DevSpacesTypes[size];
 
         for(int i = 0; i < size; i++)
             arrOfDevSpaces[i] = DevSpacesTypes.FREE;
     }
-    public Integer reserveFreeSpace()
+    public boolean reserveFreeSpace()
     {
         for(int i = 0; i < size; i++)
         {
             if(arrOfDevSpaces[i] == DevSpacesTypes.FREE)
             {
                 arrOfDevSpaces[i] = DevSpacesTypes.RESERVED;
-                return i;
+                spacesReserved += 1;
+                return true;
             }
         }
 
-        return -1;
+        return false;
     }
-    public void freeReservedSpace(Integer idx)
+    public boolean freeReservedSpace()
     {
-        if(idx < size)
-            arrOfDevSpaces[idx] = DevSpacesTypes.FREE;
+        for(int i = 0; i < size; i++)
+        {
+            if(arrOfDevSpaces[i] == DevSpacesTypes.RESERVED)
+            {
+                arrOfDevSpaces[i] = DevSpacesTypes.FREE;
+                spacesReserved -= 1;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public boolean existsFreeSpace()
+    {
+        return spacesReserved != size;
     }
 }

@@ -16,7 +16,7 @@ public class StorageSystem implements cp2023.base.StorageSystem {
     private Map<DeviceId, Integer> deviceTotalSlots;
 
     // deviceSpacseMap - knows if there are free to use spaces on device or not
-    private Map<DeviceId, DeviceSpaceHandler> deviceSpacesMap= new ConcurrentHashMap<>();
+    private Map<DeviceId, DeviceSpaceHandler> deviceSpacesMap;
 
     // componentInDevicePlacement - remembers on which device given
     // component is stored.
@@ -42,7 +42,7 @@ public class StorageSystem implements cp2023.base.StorageSystem {
         isCompBeingTransfered = new HashMap<>();
         semaphoreIsCompBeingTransfered = new HashMap<>();
         semaphoreForTransfer = new Semaphore(1, true);
-        deviceSpacesMap = new HashMap<>();
+        deviceSpacesMap = new ConcurrentHashMap<>();;
 
         for(DeviceId devId : deviceTotalSlots.keySet())
         {
@@ -59,6 +59,8 @@ public class StorageSystem implements cp2023.base.StorageSystem {
 
     @Override
     public void execute(ComponentTransfer transfer) throws TransferException {
+
+        // zanim zrobimy transfer prepare musimy miec
 
     }
     protected Map<DeviceId, Integer> getDeviceSlotsMap()
