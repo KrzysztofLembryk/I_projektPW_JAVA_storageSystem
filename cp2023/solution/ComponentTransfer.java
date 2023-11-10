@@ -91,8 +91,18 @@ public class ComponentTransfer implements cp2023.base.ComponentTransfer {
 
         storSys.getSemaphoreForTransfer().release();
     }
-
-    public ComponentTransfer(TypeOfTransfer type, StorageSystem storSys,
+    private void setTransferType()
+    {
+        if(srcDevId == null && destDevId == null)
+            transferType = TypeOfTransfer.WRONG;
+        else if(srcDevId == null && destDevId != null)
+            transferType = TypeOfTransfer.ADD;
+        else if(srcDevId != null && destDevId == null)
+            transferType = TypeOfTransfer.REMOVE;
+        else
+            transferType = TypeOfTransfer.TRANSFER;
+    }
+    public ComponentTransfer(StorageSystem storSys,
                              ComponentId compId, DeviceId srcDevID,
                              DeviceId destDevID)
             throws ComponentIsBeingOperatedOn, DeviceDoesNotExist, IllegalTransferType,
@@ -101,7 +111,6 @@ public class ComponentTransfer implements cp2023.base.ComponentTransfer {
         try
         {
             this.storSys = storSys;
-            this.transferType = type;
             this.compId = compId;
             this.srcDevId = srcDevID;
             this.destDevId = destDevID;
@@ -109,6 +118,7 @@ public class ComponentTransfer implements cp2023.base.ComponentTransfer {
             this.isPerformed = false;
             this.myThread = Thread.currentThread();
 
+            setTransferType();
             checkTransfer();
         }
         catch(InterruptedException e)
