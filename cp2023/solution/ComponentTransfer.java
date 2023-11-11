@@ -14,7 +14,7 @@ public class ComponentTransfer implements cp2023.base.ComponentTransfer {
     private boolean isPrepared;
     private boolean isPerformed;
     private final Thread myThread;
-    TypeOfTransfer transferType;
+    private TypeOfTransfer transferType;
 
 
     private void isTransferOK() throws DeviceDoesNotExist, ComponentDoesNotNeedTransfer,
@@ -49,7 +49,7 @@ public class ComponentTransfer implements cp2023.base.ComponentTransfer {
             if(compInDevMap.get(compId) == destDevId)
                 throw new ComponentDoesNotNeedTransfer(compId, destDevId);
         }
-        else
+        else if(transferType == TypeOfTransfer.WRONG)
         {
             throw new IllegalTransferType(compId);
         }
@@ -61,13 +61,11 @@ public class ComponentTransfer implements cp2023.base.ComponentTransfer {
         // PROSTSZA WERSJA Z JEDNYM SEMAPHOREM - NA RAZIE NIE WIEM JAK Z WIELOMA ZROBIC
         storSys.getSemaphoreForTransfer().acquire();
 
-        boolean compIdExist = storSys.getCompPlacementMap().containsKey(compId);
-
         // we check if compID is in map that stores whether given compID is being transfered
 //            if(compIdExist)
 //                storageSystem.getSemaphoreCompTransfered().get(compId).acquire();
 
-        if(!compIdExist)
+        if(!storSys.getCompPlacementMap().containsKey(compId) && transferType == TypeOfTransfer.ADD)
         {
             // if there is no such compID this means we either add new comp
             // so we have another semaphore for adding components,
@@ -75,6 +73,10 @@ public class ComponentTransfer implements cp2023.base.ComponentTransfer {
             //storageSystem.getSemaphoreForNewComp().acquire();
 
             storSys.getIsCompBeingTransfered().put(compId, false);
+        }
+        else if(!storSys.getCompPlacementMap().containsKey(compId))
+        {
+
         }
 
         if(!storSys.getIsCompBeingTransfered().get(compId))
@@ -149,18 +151,47 @@ public class ComponentTransfer implements cp2023.base.ComponentTransfer {
     {
         return destDevId;
     }
+
+
     @Override
     public void prepare()
     {
-
+        switch(transferType)
+        {
+            case ADD:
+                break;
+            case REMOVE:
+                break;
+            case TRANSFER:
+                Map<ComponentId, DeviceId> compInDevMap = storSys.getCompPlacementMap();
+                compInDevMap.put(compId, null);
+                break;
+            default:
+                break;
+        }
     }
 
     @Override
     public void perform()
     {
-
+        Map<ComponentId, DeviceId> compInDevMap = storSys.getCompPlacementMap();
+        switch(transferType)
+        {
+            case ADD, TRANSFER:
+                compInDevMap.put(compId, destDevId);
+                storSys.getIsCompBeingTransfered().put(compId, false);
+                break;
+            case REMOVE:
+                compInDevMap.remove(compId);
+                // UWAGA - CO JESLI USUNIEMY COMPid ALE STWORZYLISMY WCZESNIEJ TRANSFER Z WLASNIE
+                // TYM COMPid (mogl sie zdarzyc taki przeplot
+                storSys.getIsCompBeingTransfered().remove(compId);
+                break;
+            default:
+                break;
+        }
         // at the very end of perform method we need to inform system that
         // transfer at given component has ended, and thus we can create another transfer
-        storSys.getIsCompBeingTransfered().put(compId, false);
+
     }
 }

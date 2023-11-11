@@ -13,7 +13,7 @@ public class DeviceSpaceHandler {
         for(int i = 0; i < size; i++)
             arrOfDevSpaces[i] = DevSpacesTypes.FREE;
     }
-    public boolean reserveFreeSpace()
+    public boolean reserveSpace()
     {
         for(int i = 0; i < size; i++)
         {
@@ -27,7 +27,7 @@ public class DeviceSpaceHandler {
 
         return false;
     }
-    public boolean freeReservedSpace()
+    public boolean freeSpace()
     {
         for(int i = 0; i < size; i++)
         {
