@@ -132,7 +132,8 @@ public class StorageSystem implements cp2023.base.StorageSystem {
         {
             if(!deviceMap.containsKey(srcDevId))
                 throw new DeviceDoesNotExist(srcDevId);
-            if(!compInDevicePlacement.containsKey(compId) || compInDevicePlacement.get(compId) != srcDevId)
+            if(!compInDevicePlacement.containsKey(compId) ||
+                    !compInDevicePlacement.get(compId).equals(srcDevId))
                 throw new ComponentDoesNotExist(compId, srcDevId);
             // component we want to remove is not in device of given ID
         }
@@ -142,7 +143,8 @@ public class StorageSystem implements cp2023.base.StorageSystem {
                 throw new DeviceDoesNotExist(srcDevId);
             if(!deviceMap.containsKey(destDevId))
                 throw new DeviceDoesNotExist(destDevId);
-            if(!compInDevicePlacement.containsKey(compId) || compInDevicePlacement.get(compId) != srcDevId)
+            if(!compInDevicePlacement.containsKey(compId) ||
+                    !compInDevicePlacement.get(compId).equals(srcDevId))
                 throw new ComponentDoesNotExist(compId, srcDevId);
             if(compInDevicePlacement.get(compId) == destDevId)
                 throw new ComponentDoesNotNeedTransfer(compId, destDevId);
@@ -185,11 +187,20 @@ public class StorageSystem implements cp2023.base.StorageSystem {
 
         try {
 
-            System.out.println("transfer " + Thread.currentThread().getId() + ", before transfer check, "
-                    + "destDevId: " + destDevId);
+            //System.out.println("transfer " + Thread.currentThread().getId() + ", before transfer check, "
+            //        + "destDevId: " + destDevId);
             try
             {
                 semaphoreCheckTransfer.acquire();
+//                System.out.println("Transfer" + Thread.currentThread().getId() + ", Checking if " + compId + " is in srcDev " + srcDevId);
+//                if(compInDevicePlacement.containsKey(compId))
+//                    System.out.println(compId + " is in dev");
+//                System.out.println("Transfer" + Thread.currentThread().getId() + ", Checking if " + compId + " srcDev is equal " +
+//                        "where compId is");
+//                if(compInDevicePlacement.get(compId) != srcDevId)
+//                    System.out.println(compId + " is in: " + compInDevicePlacement.get(compId) + " but should be in " + srcDevId);
+//                else
+//                    System.out.println("srcDev is equal");
                 //System.out.println("transfer: " + Thread.currentThread().getId() + " start checkTransfer");
                 isTransferOK(transferType, compId, srcDevId, destDevId);
                 checkIsCompBeingTransfered(compId, transferType);
@@ -223,6 +234,8 @@ public class StorageSystem implements cp2023.base.StorageSystem {
 
                     isCompBeingTransfered.put(compId, false);
                     compInDevicePlacement.put(compId, destDevId);
+//                    System.out.println("ADD compMap:");
+//                    printCompMap();
 
                     semaphoreCheckTransfer.release();
                     transfer.perform();
@@ -241,6 +254,9 @@ public class StorageSystem implements cp2023.base.StorageSystem {
 
                     isCompBeingTransfered.remove(compId);
                     compInDevicePlacement.remove(compId);
+
+//                    System.out.println("Remove compMap:");
+//                    printCompMap();
 
                     semaphoreCheckTransfer.release();
                     transfer.perform();
@@ -272,6 +288,9 @@ public class StorageSystem implements cp2023.base.StorageSystem {
                     //System.out.println("chuj transfer");
                     isCompBeingTransfered.put(compId, false);
                     compInDevicePlacement.put(compId, destDevId);
+
+//                    System.out.println("TRANSFER compMap:");
+//                    printCompMap();
 
                     semaphoreCheckTransfer.release();
 
@@ -306,5 +325,10 @@ public class StorageSystem implements cp2023.base.StorageSystem {
     protected Semaphore getSemaphoreForTransfer()
     {
         return null;
+    }
+    public void printCompMapping()
+    {
+        for(ComponentId id : compInDevicePlacement.keySet())
+            System.out.println("Comp" + id + " : " + compInDevicePlacement.get(id));
     }
 }
