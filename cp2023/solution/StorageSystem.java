@@ -5,7 +5,6 @@ import cp2023.base.ComponentTransfer;
 import cp2023.base.DeviceId;
 import cp2023.exceptions.*;
 
-import java.lang.reflect.Type;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -19,9 +18,9 @@ public class StorageSystem implements cp2023.base.StorageSystem {
     // deviceSpacseMap - knows if there are free to use spaces on device or not
     private Map<DeviceId, DeviceSpaceHandler> deviceSpacesMap;
 
-    private Map<DeviceId, Semaphore> semaphoresForDevices;
+    private Map<DeviceId, Semaphore> semaphoresForDev;
     private Map<DeviceId, Semaphore> semaphoresForDevSpaces;
-    private final Semaphore sempahoreCheckTransfer = new Semaphore(1, true);
+    private Semaphore semaphoreCheckTransfer;
 
     // componentInDevicePlacement - remembers on which device given
     // component is stored.
@@ -38,7 +37,6 @@ public class StorageSystem implements cp2023.base.StorageSystem {
     // if given component was being transfered and at that very point it wasnt being transfered
     // so both threads would be able to transfer it
     private Map<ComponentId, Semaphore> semaphoreIsCompBeingTransfered;
-    private Semaphore semaphoreForTransfer;
 
     private void initialiseSemaphoresForDevMap() throws InterruptedException
     {
@@ -74,16 +72,16 @@ public class StorageSystem implements cp2023.base.StorageSystem {
 
         isCompBeingTransfered = new HashMap<>();
         semaphoreIsCompBeingTransfered = new HashMap<>();
-        semaphoreForTransfer = new Semaphore(1, true);
+        semaphoreCheckTransfer = new Semaphore(1, true);
 
         deviceSpacesMap = new ConcurrentHashMap<>();
-        semaphoresForDevices = new ConcurrentHashMap<>();
+        semaphoresForDev = new ConcurrentHashMap<>();
         semaphoresForDevSpaces = new ConcurrentHashMap<>();
 
         for(DeviceId devId : deviceTotalSlots.keySet())
         {
             deviceSpacesMap.put(devId, new DeviceSpaceHandler(deviceTotalSlots.get(devId)));
-            semaphoresForDevices.put(devId, new Semaphore(1, false));
+            semaphoresForDev.put(devId, new Semaphore(1, false));
             semaphoresForDevSpaces.put(devId, new Semaphore(deviceTotalSlots.get(devId), false));
         }
 
@@ -189,74 +187,75 @@ public class StorageSystem implements cp2023.base.StorageSystem {
 
             System.out.println("transfer " + Thread.currentThread().getId() + ", before transfer check, "
                     + "destDevId: " + destDevId);
-            sempahoreCheckTransfer.acquire();
-            isTransferOK(transferType, compId, srcDevId, destDevId);
-            checkIsCompBeingTransfered(compId, transferType);
-            sempahoreCheckTransfer.release();
-            System.out.println("transfer " + Thread.currentThread().getId() + ", before switch, "
-                    + "destDevId: " + destDevId);
+            try
+            {
+                semaphoreCheckTransfer.acquire();
+                //System.out.println("transfer: " + Thread.currentThread().getId() + " start checkTransfer");
+                isTransferOK(transferType, compId, srcDevId, destDevId);
+                checkIsCompBeingTransfered(compId, transferType);
+                //System.out.println("transfer: " + Thread.currentThread().getId() + " end checkTransfer");
+            }
+            finally
+            {
+                semaphoreCheckTransfer.release();
+            }
+
+
+
+            //System.out.println("transfer " + Thread.currentThread().getId() + ", before switch, "
+            //        + "destDevId: " + destDevId);
+
             switch (transferType) {
-                case ADD:
-
-
+                case ADD -> {
+                    //System.out.println("chuj add");
                     // czekamy na wolne miejsce na naszym urzadzeniu
                     semaphoresForDevSpaces.get(destDevId).acquire();
                     transfer.prepare();
                     deviceSpacesMap.get(destDevId).reserveSpace();
                     // ustawiamy sie w kolejce do urzadzenia w ktorym rezerwujemy miejsce
-                    semaphoresForDevices.get(destDevId).acquire();
+                    semaphoresForDev.get(destDevId).acquire();
                     // jesli bylo wolne miejsce i nikt juz nie korzysta z device, to tu wchodzimy i je rezerwujemy
 
                     // przed wykonaniem transferu musimy zapewnic ze nikt aktualnie
                     // nie sprawdza czy dany komponent istnieje w naszym systemie
                     // bo po wykonaniu transferu moze on juz nie istniec
-                    sempahoreCheckTransfer.acquire();
-
+                    semaphoreCheckTransfer.acquire();
 
                     isCompBeingTransfered.put(compId, false);
                     compInDevicePlacement.put(compId, destDevId);
 
-                    sempahoreCheckTransfer.release();
+                    semaphoreCheckTransfer.release();
                     transfer.perform();
-
-
-
-                    semaphoresForDevices.get(destDevId).release();
-                    break;
-                case REMOVE:
+                    semaphoresForDev.get(destDevId).release();
+                }
+                case REMOVE -> {
                     // czekamy na dostep do urzadzenia, nie chcemy zeby dwa transfery jednoczesnie
                     // robily cos na urzadzeniu
-                    semaphoresForDevices.get(srcDevId).acquire();
-
+                    //System.out.println("chuj remove");
+                    semaphoresForDev.get(srcDevId).acquire();
                     transfer.prepare();
-
-
                     semaphoresForDevSpaces.get(srcDevId).release();
 
-
-
-                    sempahoreCheckTransfer.acquire();
+                    semaphoreCheckTransfer.acquire();
 
 
                     isCompBeingTransfered.remove(compId);
                     compInDevicePlacement.remove(compId);
 
-                    sempahoreCheckTransfer.release();
+                    semaphoreCheckTransfer.release();
                     transfer.perform();
+                    semaphoresForDev.get(srcDevId).release();
+                }
 
-                    semaphoresForDevices.get(srcDevId).release();
-
-                    //deviceSpacesMap.get(srcDevId).freeSpace();
+                //deviceSpacesMap.get(srcDevId).freeSpace();
 
 
-                    break;
-                case TRANSFER:
+                case TRANSFER -> {
 
                     // czekamy na wolne miejsce na destDev
-                    System.out.println("transfer " + Thread.currentThread().getId() + ", case: transfer "
-                    + "before semDevSpaces Acquire, destDevId: " + destDevId);
+                    //System.out.println("transfer " + Thread.currentThread().getId() + ", case: transfer "
+                    //        + "before semDevSpaces Acquire, destDevId: " + destDevId);
                     semaphoresForDevSpaces.get(destDevId).acquire();
-
                     transfer.prepare();
 
                     //deviceSpacesMap.get(srcDevId).freeSpace();
@@ -264,26 +263,22 @@ public class StorageSystem implements cp2023.base.StorageSystem {
 
                     //deviceSpacesMap.get(destDevId).reserveSpace();
 
-                    semaphoresForDevices.get(destDevId).acquire();
+                    semaphoresForDev.get(destDevId).acquire();
                     // jak juz mamy miejsce na destDev, to czekamy na udostepnienie srcDev
                     //semaphoresForDevices.get(srcDevId).acquire();
 
-                    sempahoreCheckTransfer.acquire();
+                    semaphoreCheckTransfer.acquire();
 
-
+                    //System.out.println("chuj transfer");
                     isCompBeingTransfered.put(compId, false);
                     compInDevicePlacement.put(compId, destDevId);
 
-                    sempahoreCheckTransfer.release();
+                    semaphoreCheckTransfer.release();
+
                     transfer.perform();
-
-                    semaphoresForDevices.get(destDevId).release();
-
-                    break;
-
-                case WRONG:
-                    System.out.println("raczej nigdy tu nie wejdziemy :)");
-                    break;
+                    semaphoresForDev.get(destDevId).release();
+                }
+                case WRONG -> System.out.println("raczej nigdy tu nie wejdziemy :)");
             }
         }
         catch(TransferException e)
@@ -310,6 +305,6 @@ public class StorageSystem implements cp2023.base.StorageSystem {
     }
     protected Semaphore getSemaphoreForTransfer()
     {
-        return semaphoreForTransfer;
+        return null;
     }
 }
