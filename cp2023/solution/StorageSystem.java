@@ -331,4 +331,35 @@ public class StorageSystem implements cp2023.base.StorageSystem {
         for(ComponentId id : compInDevicePlacement.keySet())
             System.out.println("Comp" + id + " : " + compInDevicePlacement.get(id));
     }
+
+    public static void test()
+    {
+        Map<ComponentId, DeviceId> compInDevicePlacement = new HashMap<>();
+
+        ComponentId compID1 = new ComponentId(68);
+        ComponentId compID2 = new ComponentId(68);
+        DeviceId dev1 = new DeviceId(1);
+        compInDevicePlacement.put(compID1, dev1);
+
+
+        if(compInDevicePlacement.containsKey(compID2))
+            System.out.println("compID1 = compID2");
+        else
+            System.out.println("nie rownaja sie");
+
+        compInDevicePlacement.put(compID2, dev1);
+
+        for(ComponentId id : compInDevicePlacement.keySet())
+        {
+            if(id.compareTo(new ComponentId(68)) == 0)
+                System.out.println("istnieje compId 68");
+        }
+        System.out.println("map size: " + compInDevicePlacement.size());
+
+
+    }
+    public static void main(String[] args)
+    {
+        StorageSystem.test();
+    }
 }
