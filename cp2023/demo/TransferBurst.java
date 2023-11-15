@@ -23,8 +23,11 @@ public final class TransferBurst {
 
     public static void main(String[] args) {
         StorageSystem system = setupSystem();
+        system.printCompMapping();
         Collection<Thread> users = setupTransferers(system);
         runTransferers(users);
+        System.out.println("WYNIKOWE MAPOWANIE");
+        system.printCompMapping();
     }
 
     private final static StorageSystem setupSystem() {

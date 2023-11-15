@@ -12,5 +12,7 @@ import cp2023.exceptions.TransferException;
 public interface StorageSystem {
 
     void execute(ComponentTransfer transfer) throws TransferException;
+
+    void printCompMapping();
     
 }
