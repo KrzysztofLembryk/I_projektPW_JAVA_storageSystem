@@ -6,7 +6,9 @@ import cp2023.base.DeviceId;
 import cp2023.exceptions.*;
 
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.Map;
+import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 
@@ -24,6 +26,10 @@ public class StorageSystem implements cp2023.base.StorageSystem {
     private Map<DeviceId, Semaphore> semaphoresDev;
     private Map<DeviceId, Semaphore> semaphoresDevSpaces;
     private Semaphore semaphoreCheckTransfer;
+
+    // CycleMap stores (srcDev, queue of destDev), meaning from srcDev we want to
+    // transfer  to destDev
+    private Map<DeviceId, Queue<Pair<DeviceId, ComponentId>>> cycleMap = new HashMap<>();
 
 
     private void initialiseSemaphoresForDevMap() throws InterruptedException
@@ -62,6 +68,7 @@ public class StorageSystem implements cp2023.base.StorageSystem {
             deviceSpacesMap.put(devId, new DeviceSpaceHandler(deviceTotalSlots.get(devId)));
             semaphoresDev.put(devId, new Semaphore(1, false));
             semaphoresDevSpaces.put(devId, new Semaphore(deviceTotalSlots.get(devId), false));
+            cycleMap.put(devId, new LinkedList<>());
         }
 
         for(ComponentId compId : componentPlacement.keySet())
@@ -76,6 +83,35 @@ public class StorageSystem implements cp2023.base.StorageSystem {
             System.out.println(e);
         }
     }
+
+    private void checkCycles(DeviceId srcId, DeviceId destId, ComponentId compId)
+    {
+        Pair<DeviceId, ComponentId> pair = new Pair<>(destId, compId);
+        cycleMap.get(srcId).add(pair);
+
+        if(cycleMap.get(srcId).equals(pair))
+        {
+            DeviceId currDev = pair.getFirst();
+            while(true)
+            {
+                if(currDev == srcId)
+                {
+                    // cycle
+                }
+                else if(cycleMap.get(currDev).isEmpty())
+                {
+                    // no cycle
+                    break;
+                }
+                else
+                {
+                    currDev = cycleMap.get(currDev).peek().getFirst();
+                }
+            }
+        }
+
+    }
+
     private static TypeOfTransfer setTransferType(DeviceId srcDevId, DeviceId destDevId)
     {
         if(srcDevId == null && destDevId == null)
