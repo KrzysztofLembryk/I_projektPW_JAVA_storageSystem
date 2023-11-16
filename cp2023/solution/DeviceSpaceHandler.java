@@ -1,48 +1,90 @@
 package cp2023.solution;
 
+import cp2023.base.ComponentId;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.SortedMap;
+import java.util.TreeMap;
+
 public class DeviceSpaceHandler {
     private Integer size;
-    private DevSpacesTypes[] arrOfDevSpaces;
-    private int spacesReserved;
+    private SortedMap<Integer, Pair<DevSpacesTypes, ComponentId>> mapOfDevSpaces;
+    private int spacesOccupied;
     public DeviceSpaceHandler(Integer size)
     {
+        // occupied is less than size, StorageSysFactory ensures that
         this.size = size;
-        this.spacesReserved = 0;
-        arrOfDevSpaces = new DevSpacesTypes[size];
+        this.spacesOccupied = 0;
+        mapOfDevSpaces = new TreeMap<>();
 
         for(int i = 0; i < size; i++)
-            arrOfDevSpaces[i] = DevSpacesTypes.FREE;
+        {
+           mapOfDevSpaces.put(i, new Pair<>(DevSpacesTypes.FREE, null));
+        }
+
     }
-    public boolean reserveSpace()
+    public Pair<Integer, DevSpacesTypes> reserveSpace(ComponentId compId)
     {
+        // no free space, so we cannot reserve, so we need to wait on special semaphore
+        // for first free space
+        if(!existsFreeSpace())
+            return new Pair<>(-1, DevSpacesTypes.OCCUPIED);
+
+
         for(int i = 0; i < size; i++)
         {
-            if(arrOfDevSpaces[i] == DevSpacesTypes.FREE)
+            if(mapOfDevSpaces.get(i).first == DevSpacesTypes.FREE)
             {
-                arrOfDevSpaces[i] = DevSpacesTypes.RESERVED;
-                spacesReserved += 1;
-                return true;
+                mapOfDevSpaces.get(i).first = DevSpacesTypes.OCCUPIED;
+                mapOfDevSpaces.get(i).second = compId;
+                spacesOccupied += 1;
+                return new Pair<>(i, DevSpacesTypes.FREE);
+            }
+            if(mapOfDevSpaces.get(i).first == DevSpacesTypes.OK_TO_RESERVE)
+            {
+                mapOfDevSpaces.get(i).first = DevSpacesTypes.OCCUPIED;
+                mapOfDevSpaces.get(i).second = compId;
+                spacesOccupied += 1;
+                return new Pair<>(i, DevSpacesTypes.OK_TO_RESERVE);
             }
         }
 
-        return false;
+        // this return will never happen
+        return new Pair<>(-1, null);
     }
-    public boolean freeSpace()
+    public void freeSpace(Integer idx)
     {
+        spacesOccupied -= 1;
+        mapOfDevSpaces.get(idx).first = DevSpacesTypes.FREE;
+        mapOfDevSpaces.get(idx).second = null;
+    }
+    public void freeSpace(ComponentId compId)
+    {
+        // we free first occupied space
         for(int i = 0; i < size; i++)
         {
-            if(arrOfDevSpaces[i] == DevSpacesTypes.RESERVED)
+            if(mapOfDevSpaces.get(i).second != null &&
+                    mapOfDevSpaces.get(i).second.equals(compId))
             {
-                arrOfDevSpaces[i] = DevSpacesTypes.FREE;
-                spacesReserved -= 1;
-                return true;
+                spacesOccupied -= 1;
+                mapOfDevSpaces.get(i).first = DevSpacesTypes.FREE;
+                mapOfDevSpaces.get(i).second = null;
+                break;
             }
         }
-        return false;
+
+
+    }
+    public void okToReserveSpace(Integer idx)
+    {
+        spacesOccupied -= 1;
+        mapOfDevSpaces.get(idx).first = DevSpacesTypes.OK_TO_RESERVE;
+        mapOfDevSpaces.get(idx).second = null;
     }
 
     public boolean existsFreeSpace()
     {
-        return spacesReserved != size;
+        return spacesOccupied != size;
     }
 }

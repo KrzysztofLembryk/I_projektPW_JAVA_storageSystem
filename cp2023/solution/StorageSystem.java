@@ -15,7 +15,7 @@ import java.util.concurrent.Semaphore;
 public class StorageSystem implements cp2023.base.StorageSystem {
     // deviceTotalSlots - stores info about how many components
     // device of given ID can store (deviceID --> capacity).
-    private Map<DeviceId, Integer> deviceMap;
+    private Map<DeviceId, Integer> deviceCapacityMap;
     // componentInDevicePlacement - remembers on which device given
     // component is stored.
     private Map<ComponentId, DeviceId> compInDevPlacement;
@@ -24,59 +24,63 @@ public class StorageSystem implements cp2023.base.StorageSystem {
     private Map<DeviceId, DeviceSpaceHandler> deviceSpacesMap;
 
     private Map<DeviceId, Semaphore> semaphoresDev;
-    private Map<DeviceId, Semaphore> semaphoresDevSpaces;
+    //private Map<DeviceId, Semaphore> semaphoresDevSpaces;
     private Semaphore semaphoreCheckTransfer;
 
     // CycleMap stores (srcDev, queue of destDev), meaning from srcDev we want to
     // transfer  to destDev
-    private Map<DeviceId, Queue<Pair<DeviceId, ComponentId>>> cycleMap = new HashMap<>();
-
-
-    private void initialiseSemaphoresForDevMap() throws InterruptedException
-    {
-        Map<DeviceId, Integer> nbrOfElemOnDev = new HashMap<>();
-
-        for(DeviceId deviceID : deviceMap.keySet())
-            nbrOfElemOnDev.put(deviceID, 0);
-
-        // we count how many components is currently on each device
-        for(DeviceId id : compInDevPlacement.values())
-        {
-            Integer val = nbrOfElemOnDev.get(id);
-            nbrOfElemOnDev.put(id, val + 1);
-        }
-
-        for(DeviceId id : semaphoresDevSpaces.keySet())
-            semaphoresDevSpaces.get(id).acquire(nbrOfElemOnDev.get(id));
-
-    }
+    private Map<DeviceId, Queue<Pair<DeviceId, ComponentId>>> cycleMap;
+    private final Map<DeviceId, Boolean> wasDevChecked;
+    private Map<DeviceId, SemaphoresDevSpacesHandler> semaphoresDevSpaces;
 
     public StorageSystem(Map<DeviceId, Integer> deviceTotalSlots,
                                 Map<ComponentId, DeviceId> componentPlacement)
     {
-        this.deviceMap = deviceTotalSlots;
-        this.compInDevPlacement = componentPlacement;
-        this.isCompBeingTransfered = new HashMap<>();
-        this.deviceSpacesMap = new ConcurrentHashMap<>();
+        // Maps:
+        deviceCapacityMap = deviceTotalSlots;
+        compInDevPlacement = componentPlacement;
 
-        semaphoreCheckTransfer = new Semaphore(1, true);
-        semaphoresDev = new ConcurrentHashMap<>();
-        semaphoresDevSpaces = new ConcurrentHashMap<>();
-
-        for(DeviceId devId : deviceTotalSlots.keySet())
-        {
-            deviceSpacesMap.put(devId, new DeviceSpaceHandler(deviceTotalSlots.get(devId)));
-            semaphoresDev.put(devId, new Semaphore(1, false));
-            semaphoresDevSpaces.put(devId, new Semaphore(deviceTotalSlots.get(devId), false));
-            cycleMap.put(devId, new LinkedList<>());
-        }
-
+        isCompBeingTransfered = new HashMap<>();
         for(ComponentId compId : componentPlacement.keySet())
             isCompBeingTransfered.put(compId, false);
 
+        // SemaphoreCheckTransfer - chroni miejsce sprawdzania czy transfer jest ok
+        // zeby jednoczesnie dwa transfery tego nie robily, ani tez nie modyfikowaly jendoczesnie
+        // map ktore trzymaja te informacje gdy wykonuja swoj transfer.
+        semaphoreCheckTransfer = new Semaphore(1, true);
+
+        // semaphoresDev - mapa semaforow ktore pilnuja dostepu do devices, z permit=1
+        semaphoresDev = new ConcurrentHashMap<>();
+        for(DeviceId devId : deviceTotalSlots.keySet()) {
+            semaphoresDev.put(devId, new Semaphore(1, true));
+        }
+
+        cycleMap = new HashMap<>();
+        wasDevChecked = new HashMap<>();
+        for(DeviceId devId : deviceTotalSlots.keySet())
+        {
+            cycleMap.put(devId, new LinkedList<>());
+            wasDevChecked.put(devId, false);
+        }
+
+        // deviceSpacesMap - dla danego device trzyma devSpaceHandler w ktorym jest mapa
+        // trzymajaca informacje ktore miejsca na urzadzeniu (0,...,capacity-1) sa zajete/wolne
+        // i przez jakie komponenty sa one zajete.
+        deviceSpacesMap = new ConcurrentHashMap<>();
+
+        // Podobnie jak deviceSpaceMap trzyma mape analogiczna mape miejsc na danym urzadzeniu
+        // tylko tym razem dla danego miejsca (0,...,capacity-1) trzyma semafor ktory wpuszcza
+        // na dane miejsce, trzyma tez informacje o komponencie na danym miejscu
+        semaphoresDevSpaces = new ConcurrentHashMap<>();
         try
         {
-            initialiseSemaphoresForDevMap();
+            for(ComponentId compId : compInDevPlacement.keySet())
+            {
+                Pair<Integer, DevSpacesTypes> p =
+                        deviceSpacesMap.get(compInDevPlacement.get(compId)).reserveSpace(compId);
+
+                semaphoresDevSpaces.get(compInDevPlacement.get(compId)).acquire(p.first);
+            }
         }
         catch(InterruptedException e)
         {
@@ -84,30 +88,44 @@ public class StorageSystem implements cp2023.base.StorageSystem {
         }
     }
 
+
     private void checkCycles(DeviceId srcId, DeviceId destId, ComponentId compId)
     {
+        for(DeviceId id : wasDevChecked.keySet())
+            wasDevChecked.put(id, false);
+
+        boolean foundCycle = false;
         Pair<DeviceId, ComponentId> pair = new Pair<>(destId, compId);
+
         cycleMap.get(srcId).add(pair);
+
+        for(DeviceId currDevId : wasDevChecked.keySet())
+        {
+            if(!wasDevChecked.get(currDevId))
+            {
+                DeviceId currDev = pair.getFirst();
+            }
+        }
 
         if(cycleMap.get(srcId).equals(pair))
         {
-            DeviceId currDev = pair.getFirst();
-            while(true)
-            {
-                if(currDev == srcId)
-                {
-                    // cycle
-                }
-                else if(cycleMap.get(currDev).isEmpty())
-                {
-                    // no cycle
-                    break;
-                }
-                else
-                {
-                    currDev = cycleMap.get(currDev).peek().getFirst();
-                }
-            }
+
+//            while(true)
+//            {
+//                if(currDev == srcId)
+//                {
+//                    // cycle
+//                }
+//                else if(cycleMap.get(currDev).isEmpty())
+//                {
+//                    // no cycle
+//                    break;
+//                }
+//                else
+//                {
+//                    currDev = cycleMap.get(currDev).peek().getFirst();
+//                }
+//            }
         }
 
     }
@@ -130,14 +148,14 @@ public class StorageSystem implements cp2023.base.StorageSystem {
     {
         if(transferType == TypeOfTransfer.ADD)
         {
-            if(!deviceMap.containsKey(destDevId))
+            if(!deviceCapacityMap.containsKey(destDevId))
                 throw new DeviceDoesNotExist(destDevId);
             if(compInDevPlacement.containsKey(compId))
                 throw new ComponentAlreadyExists(compId);
         }
         else if(transferType == TypeOfTransfer.REMOVE)
         {
-            if(!deviceMap.containsKey(srcDevId))
+            if(!deviceCapacityMap.containsKey(srcDevId))
                 throw new DeviceDoesNotExist(srcDevId);
             if(!compInDevPlacement.containsKey(compId) ||
                     !compInDevPlacement.get(compId).equals(srcDevId))
@@ -146,9 +164,9 @@ public class StorageSystem implements cp2023.base.StorageSystem {
         }
         else if(transferType == TypeOfTransfer.TRANSFER)
         {
-            if(!deviceMap.containsKey(srcDevId))
+            if(!deviceCapacityMap.containsKey(srcDevId))
                 throw new DeviceDoesNotExist(srcDevId);
-            if(!deviceMap.containsKey(destDevId))
+            if(!deviceCapacityMap.containsKey(destDevId))
                 throw new DeviceDoesNotExist(destDevId);
             if(!compInDevPlacement.containsKey(compId) ||
                     !compInDevPlacement.get(compId).equals(srcDevId))
@@ -181,6 +199,17 @@ public class StorageSystem implements cp2023.base.StorageSystem {
             isCompBeingTransfered.put(compId, true);
         else
             throw new ComponentIsBeingOperatedOn(compId);
+    }
+    private void findSpaceOnDevice(ComponentTransfer transfer)
+    {
+        DeviceId srcDevId, destDevId;
+        ComponentId compId = transfer.getComponentId();
+        srcDevId = transfer.getSourceDeviceId();
+        destDevId = transfer.getDestinationDeviceId();
+        TypeOfTransfer transferType = setTransferType(srcDevId, destDevId);
+
+
+
     }
     @Override
     public void execute(ComponentTransfer transfer) throws TransferException {
@@ -227,6 +256,8 @@ public class StorageSystem implements cp2023.base.StorageSystem {
                     semaphoresDev.get(destDevId).release();
                 }
                 case REMOVE -> {
+
+                    Pair<Integer, DevSpacesTypes> idx_space = deviceSpacesMap.get(destDevId)
 
                     semaphoresDev.get(srcDevId).acquire();
 
