@@ -2,22 +2,19 @@ package cp2023.solution;
 
 import cp2023.base.ComponentId;
 
-import java.util.HashMap;
 import java.util.Map;
-import java.util.SortedMap;
-import java.util.TreeMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 
 public class SemaphoresDevSpacesHandler {
     private Integer size;
-    private SortedMap<Integer, Pair<Semaphore, ComponentId>> semSpacesMap;
-    private Semaphore noSpaceSemaphore;
-    private Integer howManyWaiting = 0;
+    private Map<Integer, Pair<Semaphore, ComponentId>> semSpacesMap;
+    private Semaphore waitingQueueSemaphore;
 
     public SemaphoresDevSpacesHandler(Integer size) throws InterruptedException
     {
-        semSpacesMap = new TreeMap<>();
-        noSpaceSemaphore = new Semaphore(0, true);
+        semSpacesMap = new ConcurrentHashMap<>();
+        waitingQueueSemaphore = new Semaphore(0, true);
 
         for(int i = 0; i < size; i++)
             semSpacesMap.put(i, new Pair<>(new Semaphore(1, true), null));
@@ -28,10 +25,16 @@ public class SemaphoresDevSpacesHandler {
     {
         semSpacesMap.get(idx).first.acquire();
     }
-    public void noFreeSpaceAcquire() throws InterruptedException
+    public Pair<Integer, DevSpacesTypes> noFreeSpaceAcquire(ComponentId compId, DeviceSpaceHandler devHandler)
+            throws InterruptedException
     {
-        howManyWaiting += 1;
-        noSpaceSemaphore.acquire();
+        waitingQueueSemaphore.acquire();
+
+        // dziedziczenie sekcji krytycznej:
+        Pair<Integer, DevSpacesTypes> idx_spaceType = devHandler.freedThread_reserveSpace(compId);
+
+        return idx_spaceType;
+
     }
     public void release(Integer idx)
     {
@@ -50,14 +53,15 @@ public class SemaphoresDevSpacesHandler {
         }
     }
 
-    public void noFreeSpaceRelease()
-    {
-        if(howManyWaiting > 0)
-            howManyWaiting -= 1;
-        noSpaceSemaphore.release();
-    }
+//    public void noFreeSpaceRelease()
+//    {
+//        if(howManyWaiting > 0)
+//            howManyWaiting -= 1;
+//        waitingQueueSemaphore.release();
+//    }
 
-    public Integer getHowManyWaiting() {
-        return howManyWaiting;
+    public Semaphore getWaitingQueueSemaphore()
+    {
+        return waitingQueueSemaphore;
     }
 }
