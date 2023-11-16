@@ -12,6 +12,7 @@ public class SemaphoresDevSpacesHandler {
     private Integer size;
     private SortedMap<Integer, Pair<Semaphore, ComponentId>> semSpacesMap;
     private Semaphore noSpaceSemaphore;
+    private Integer howManyWaiting = 0;
 
     public SemaphoresDevSpacesHandler(Integer size) throws InterruptedException
     {
@@ -29,6 +30,7 @@ public class SemaphoresDevSpacesHandler {
     }
     public void noFreeSpaceAcquire() throws InterruptedException
     {
+        howManyWaiting += 1;
         noSpaceSemaphore.acquire();
     }
     public void release(Integer idx)
@@ -50,8 +52,12 @@ public class SemaphoresDevSpacesHandler {
 
     public void noFreeSpaceRelease()
     {
+        if(howManyWaiting > 0)
+            howManyWaiting -= 1;
         noSpaceSemaphore.release();
     }
 
-
+    public Integer getHowManyWaiting() {
+        return howManyWaiting;
+    }
 }

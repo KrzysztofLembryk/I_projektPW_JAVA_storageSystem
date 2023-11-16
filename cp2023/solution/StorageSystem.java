@@ -22,6 +22,7 @@ public class StorageSystem implements cp2023.base.StorageSystem {
     private Map<ComponentId, Boolean> isCompBeingTransfered;
     // deviceSpacseMap - knows if there are free to use spaces on device or not
     private Map<DeviceId, DeviceSpaceHandler> deviceSpacesMap;
+    //private Map<DeviceId, Semaphore> semaphoreCanICheckDevSpace;
 
     private Map<DeviceId, Semaphore> semaphoresDev;
     //private Map<DeviceId, Semaphore> semaphoresDevSpaces;
@@ -51,6 +52,9 @@ public class StorageSystem implements cp2023.base.StorageSystem {
 
         // semaphoresDev - mapa semaforow ktore pilnuja dostepu do devices, z permit=1
         semaphoresDev = new ConcurrentHashMap<>();
+        // semaphoreCanICheckDevSpace -
+        //semaphoreCanICheckDevSpace = new ConcurrentHashMap<>();
+
         for(DeviceId devId : deviceTotalSlots.keySet()) {
             semaphoresDev.put(devId, new Semaphore(1, true));
         }
@@ -74,12 +78,20 @@ public class StorageSystem implements cp2023.base.StorageSystem {
         semaphoresDevSpaces = new ConcurrentHashMap<>();
         try
         {
+            for(DeviceId devId : deviceCapacityMap.keySet())
+            {
+                Integer capacity = deviceCapacityMap.get(devId);
+                deviceSpacesMap.put(devId, new DeviceSpaceHandler(capacity));
+                semaphoresDevSpaces.put(devId, new SemaphoresDevSpacesHandler(capacity));
+            }
+
             for(ComponentId compId : compInDevPlacement.keySet())
             {
+                DeviceId devId = compInDevPlacement.get(compId);
                 Pair<Integer, DevSpacesTypes> p =
-                        deviceSpacesMap.get(compInDevPlacement.get(compId)).reserveSpace(compId);
+                        deviceSpacesMap.get(devId).reserveSpace(compId);
 
-                semaphoresDevSpaces.get(compInDevPlacement.get(compId)).acquire(p.first);
+                semaphoresDevSpaces.get(devId).acquire(p.first);
             }
         }
         catch(InterruptedException e)
@@ -200,17 +212,6 @@ public class StorageSystem implements cp2023.base.StorageSystem {
         else
             throw new ComponentIsBeingOperatedOn(compId);
     }
-    private void findSpaceOnDevice(ComponentTransfer transfer)
-    {
-        DeviceId srcDevId, destDevId;
-        ComponentId compId = transfer.getComponentId();
-        srcDevId = transfer.getSourceDeviceId();
-        destDevId = transfer.getDestinationDeviceId();
-        TypeOfTransfer transferType = setTransferType(srcDevId, destDevId);
-
-
-
-    }
     @Override
     public void execute(ComponentTransfer transfer) throws TransferException {
         DeviceId srcDevId, destDevId;
@@ -233,6 +234,10 @@ public class StorageSystem implements cp2023.base.StorageSystem {
 
             switch (transferType) {
                 case ADD -> {
+
+                    semaphoresDev.get(destDevId).acquire();
+                    Pair<Integer, DevSpacesTypes> idx_spaceType =
+                            deviceSpacesMap.get(destDevId).reserveSpace(compId);
 
                     // czekamy na wolne miejsce na naszym urzadzeniu
                     semaphoresDevSpaces.get(destDevId).acquire();

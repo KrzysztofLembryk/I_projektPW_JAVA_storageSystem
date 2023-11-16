@@ -82,8 +82,7 @@ public class DeviceSpaceHandler {
         mapOfDevSpaces.get(idx).first = DevSpacesTypes.OK_TO_RESERVE;
         mapOfDevSpaces.get(idx).second = null;
     }
-
-    public boolean existsFreeSpace()
+    private boolean existsFreeSpace()
     {
         return spacesOccupied != size;
     }
