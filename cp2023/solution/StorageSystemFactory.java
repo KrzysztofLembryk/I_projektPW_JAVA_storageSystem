@@ -19,6 +19,10 @@ public final class StorageSystemFactory {
     private static void isDeviceMapCorrect(Map<DeviceId, Integer> deviceTotalSlots) throws IllegalArgumentException
     {
         // we check if any device has 0 capacity, if such device exist we throw exception
+        if(deviceTotalSlots.isEmpty())
+            throw new IllegalArgumentException("StorageSystemFactory - newSystem - areArgsCorrect - " +
+                    "isDeviceMapCorrect - map is empty");
+
         for(Integer capacity : deviceTotalSlots.values())
             if(capacity == 0)
                 throw new IllegalArgumentException("StorageSystemFactory - newSystem - areArgsCorrect - " +
