@@ -326,19 +326,6 @@ public class StorageSystem implements cp2023.base.StorageSystem {
                             deviceSpacesMap.get(destDevId).reserveSpace(compId);
                     semaphoresDev.get(destDevId).release();
 
-                    // Sprawdzamy jakie miejsce otrzymalismy.
-//                    DevSpacesTypes spaceIGot = idx_spaceType.second;
-//                    switch (spaceIGot)
-//                    {
-//                        case FREE -> {
-//                            case_ADD_free(transfer, idx_spaceType);
-//                        }
-//                        case OK_TO_RESERVE -> {
-//                           case_ADD_ok_to_reserve(transfer, idx_spaceType);
-//                        }
-//                        // BRAK OCCUPIED - zalatwia nam to kolejka semaphoreQueueForDevSpaces
-//                    }
-
                     do_ADDING(transfer,idxOfMySpace);
 
                     // Jak skonczylismy juz robic performa dla naszego komponentu to mozemy
