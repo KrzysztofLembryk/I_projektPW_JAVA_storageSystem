@@ -7,12 +7,13 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 
 public class SemaphoresDevSpacesHandler {
-    private Integer size;
+    private final Integer size;
     private Map<Integer, Pair<Semaphore, ComponentId>> semSpacesMap;
     private Semaphore waitingQueueSemaphore;
 
     public SemaphoresDevSpacesHandler(Integer size) throws InterruptedException
     {
+        this.size = size;
         semSpacesMap = new ConcurrentHashMap<>();
         waitingQueueSemaphore = new Semaphore(0, true);
 

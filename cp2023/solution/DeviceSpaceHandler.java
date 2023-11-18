@@ -27,6 +27,23 @@ public class DeviceSpaceHandler {
         }
 
     }
+    private int initIdx = 0;
+    protected Integer init_spaces_reservation(ComponentId compId)
+    {
+        while(initIdx < size)
+        {
+            if(mapOfDevSpaces.get(initIdx).first == DevSpacesTypes.FREE ||
+                    mapOfDevSpaces.get(initIdx).first == DevSpacesTypes.OK_TO_RESERVE)
+            {
+                mapOfDevSpaces.get(initIdx).first = DevSpacesTypes.OCCUPIED;
+                mapOfDevSpaces.get(initIdx).second = compId;
+                spacesOccupied += 1;
+                initIdx += 1;
+                return initIdx - 1;
+            }
+        }
+        return -1;
+    }
 
     public Pair<Integer, DevSpacesTypes> freeQueue_and_reserveSpace(ComponentId compId)
             throws InterruptedException
@@ -74,9 +91,6 @@ public class DeviceSpaceHandler {
 
     public Pair<Integer, DevSpacesTypes> freedThread_reserveSpace(ComponentId compId)
     {
-        // no free space, so we cannot reserve, so we need to wait on special semaphore
-        // for first free space
-
         for(int i = 0; i < size; i++)
         {
             if(mapOfDevSpaces.get(i).first == DevSpacesTypes.FREE)
@@ -107,28 +121,50 @@ public class DeviceSpaceHandler {
         mapOfDevSpaces.get(idx).first = DevSpacesTypes.FREE;
         mapOfDevSpaces.get(idx).second = null;
     }
-    public void freeSpace(ComponentId compId)
+    public void freeSpace(ComponentId compId) throws InterruptedException
     {
-        // we free first occupied space
+        // we free occupied space by us
         for(int i = 0; i < size; i++)
         {
             if(mapOfDevSpaces.get(i).second != null &&
                     mapOfDevSpaces.get(i).second.equals(compId))
             {
                 spacesOccupied -= 1;
-                mapOfDevSpaces.get(i).first = DevSpacesTypes.FREE;
                 mapOfDevSpaces.get(i).second = null;
+                mapOfDevSpaces.get(i).first = DevSpacesTypes.FREE;
+
                 break;
             }
         }
-
-
+        // jak juz zwolnilismy nasze miejsce na tym urzadzeniu to wybudzamy czekajace transfery
+        // na miejsce, tyle razy ile jest miejsc wolnych albo czekajacych transferow
+        while(existsFreeSpace() && howManyWaitingInQueue > 0)
+        {
+            howManyWaitingInQueue -= 1;
+            // robimy dziedziczenie sekcji krytycznej:
+            waitingQueueSemaphore.release();
+            semaphoreWaitForReleased.acquire();
+        }
     }
     public void okToReserveSpace(Integer idx)
     {
         spacesOccupied -= 1;
         mapOfDevSpaces.get(idx).first = DevSpacesTypes.OK_TO_RESERVE;
         mapOfDevSpaces.get(idx).second = null;
+    }
+    public void okToReserveSpace(ComponentId compId)
+    {
+        for(int i = 0; i < size; i++)
+        {
+            if(mapOfDevSpaces.get(i).second != null &&
+                    mapOfDevSpaces.get(i).second.equals(compId))
+            {
+                spacesOccupied -= 1;
+                mapOfDevSpaces.get(i).first = DevSpacesTypes.OK_TO_RESERVE;
+                mapOfDevSpaces.get(i).second = null;
+                break;
+            }
+        }
     }
     private boolean existsFreeSpace()
     {
