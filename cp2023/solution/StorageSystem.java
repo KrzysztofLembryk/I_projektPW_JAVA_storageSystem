@@ -298,6 +298,9 @@ public class StorageSystem implements cp2023.base.StorageSystem {
 
         semaphoresDev.get(srcDevId).release();
 
+        // teraz zwalniamy miejsce na kolejce
+        semaphoreQueueForDevSpaces.get(srcDevId).release();
+
         // ale mimo mozliwosci zajecia jeszcze chwile bedzie musial poczekac
         // az udostepnimy semafor
         semaphoresDevSpaces.get(srcDevId).release(compId);
@@ -358,7 +361,11 @@ public class StorageSystem implements cp2023.base.StorageSystem {
 
             switch (transferType) {
                 case ADD -> {
-                    // Jednoczesnie sprawdzac czy na danym device jest miejsce moze jeden transfer
+
+                    // we wait for place on destDevice
+                    semaphoreQueueForDevSpaces.get(destDevId).acquire();
+
+                    // Tylko jeden transfer w danej chwili moze miec przydzielane wolne miejsce
                     semaphoresDev.get(destDevId).acquire();
                     Pair<Integer, DevSpacesTypes> idx_spaceType =
                             deviceSpacesMap.get(destDevId).freeQueue_and_reserveSpace(compId);
@@ -421,7 +428,8 @@ public class StorageSystem implements cp2023.base.StorageSystem {
                 }
                 case TRANSFER -> {
 
-                    // rezerwujemy miejsce na destDev na ktore chcemy sie transferowac
+                    semaphoreQueueForDevSpaces.get(destDevId).acquire();
+
                     semaphoresDev.get(destDevId).acquire();
                     Pair<Integer, DevSpacesTypes> idx_spaceType =
                             deviceSpacesMap.get(destDevId).freeQueue_and_reserveSpace(compId);
