@@ -81,8 +81,7 @@ public class StorageSystem implements cp2023.base.StorageSystem {
             {
                 Integer capacity = deviceCapacityMap.get(devId);
                 semaphoresDevSpaces.put(devId, new SemaphoresDevSpacesHandler(capacity));
-                deviceSpacesMap.put(devId, new DeviceSpaceHandler(capacity,
-                                            semaphoresDevSpaces.get(devId).getWaitingQueueSemaphore()));
+                deviceSpacesMap.put(devId, new DeviceSpaceHandler(capacity));
                 System.out.println("storageConstructor: " + devId + ", capacity: " + capacity);
             }
 
@@ -94,7 +93,7 @@ public class StorageSystem implements cp2023.base.StorageSystem {
                 Integer idx =
                         deviceSpacesMap.get(devId).init_spaces_reservation(compId);
                 // zajmujemy semafor tego miejsca
-                semaphoresDevSpaces.get(devId).acquire(idx);
+                semaphoresDevSpaces.get(devId).acquire(idx, compId);
                 // zmniejszamy liczbe dostepnych miejsc na semaforze kolejka
                 // na ktorym ustawiaja sie i czekaja transfery na miejsca
                 semaphoreQueueForDevSpaces.get(devId).acquire();
@@ -219,7 +218,7 @@ public class StorageSystem implements cp2023.base.StorageSystem {
             throw new ComponentIsBeingOperatedOn(compId);
     }
 
-    private void do_the_TRANSFER(ComponentTransfer transfer, Integer idx)
+    private void do_the_TRANSFER(ComponentTransfer transfer, Integer idxOfMySpace)
             throws InterruptedException
     {
         DeviceId srcDevId, destDevId;
@@ -230,7 +229,6 @@ public class StorageSystem implements cp2023.base.StorageSystem {
         // jesli dostalismy miejsce ok_to_reserve to znaczy ze ktos sie z niego
         // wlasnie transferuje, wiec mozemy zrobic od razu prepare, ale z perform
         // musimy zaczekac az ten ktos skonczy swoje prepare i zwolni nam semafor
-
 
         semaphoresDev.get(srcDevId).acquire();
         // ustawiamy ze na naszym srcDev nasze miejsce jest ok do zarezerowania
@@ -249,7 +247,7 @@ public class StorageSystem implements cp2023.base.StorageSystem {
 
         // czekamy az nam zostanie zwolniony semafor miejsca, zebysmy mogli zrobic
         // perform
-        semaphoresDevSpaces.get(destDevId).acquire(idx);
+        semaphoresDevSpaces.get(destDevId).acquire(idxOfMySpace, compId);
         transfer.perform();
 
     }
@@ -263,7 +261,7 @@ public class StorageSystem implements cp2023.base.StorageSystem {
 
         // transfer typu remove mozemy od razu przygotowac, bo komponent ma juz
         // miejsce na urzadzeniu
-        transfer.prepare();
+
 
         semaphoresDev.get(srcDevId).acquire();
         // po prepare zwalniamy miejsce na urzadzeniu zeby ktos mogl juz je zajac
@@ -273,6 +271,7 @@ public class StorageSystem implements cp2023.base.StorageSystem {
 
         semaphoresDev.get(srcDevId).release();
 
+        transfer.prepare();
 
         // wiec transfer bedzie mogl zrobic swoje prepare, ale dopiero jak zwolnimy
         // semaphoreDevSpaces to bedzie mogl zrobic preform
@@ -281,16 +280,16 @@ public class StorageSystem implements cp2023.base.StorageSystem {
         // jak juz zwolnimy semafor to robimy swoj perform
         transfer.perform();
     }
-    private void do_ADDING(ComponentTransfer transfer, Integer idx) throws InterruptedException
+    private void do_ADDING(ComponentTransfer transfer, Integer idxOfMySpace) throws InterruptedException
     {
         DeviceId destDevId = transfer.getDestinationDeviceId();
-
+        ComponentId compId = transfer.getComponentId();
         // jesli dostalismy miejsce ok_to_reserve to znaczy ze ktos sie z niego
         // wlasnie transferuje, wiec mozemy zrobic od razu prepare, ale z perform
         // musimy zaczekac az ten ktos skonczy swoje prepare i zwolni nam semafor
 
         transfer.prepare();
-        semaphoresDevSpaces.get(destDevId).acquire(idx);
+        semaphoresDevSpaces.get(destDevId).acquire(idxOfMySpace, compId);
         transfer.perform();
     }
 
@@ -323,8 +322,8 @@ public class StorageSystem implements cp2023.base.StorageSystem {
 
                     // Tylko jeden transfer w danej chwili moze miec przydzielane wolne miejsce
                     semaphoresDev.get(destDevId).acquire();
-                    Pair<Integer, DevSpacesTypes> idx_spaceType =
-                            deviceSpacesMap.get(destDevId).freeQueue_and_reserveSpace(compId);
+                    Integer idxOfMySpace =
+                            deviceSpacesMap.get(destDevId).reserveSpace(compId);
                     semaphoresDev.get(destDevId).release();
 
                     // Sprawdzamy jakie miejsce otrzymalismy.
@@ -340,7 +339,7 @@ public class StorageSystem implements cp2023.base.StorageSystem {
 //                        // BRAK OCCUPIED - zalatwia nam to kolejka semaphoreQueueForDevSpaces
 //                    }
 
-                    do_ADDING(transfer,idx_spaceType);
+                    do_ADDING(transfer,idxOfMySpace);
 
                     // Jak skonczylismy juz robic performa dla naszego komponentu to mozemy
                     // zmienic ze juz transfer na tym komponencie nie jest wykonywany.
@@ -372,11 +371,11 @@ public class StorageSystem implements cp2023.base.StorageSystem {
                     semaphoreQueueForDevSpaces.get(destDevId).acquire();
 
                     semaphoresDev.get(destDevId).acquire();
-                    Pair<Integer, DevSpacesTypes> idx =
-                            deviceSpacesMap.get(destDevId).freeQueue_and_reserveSpace(compId);
+                    Integer idxOfMySpace =
+                            deviceSpacesMap.get(destDevId).reserveSpace(compId);
                     semaphoresDev.get(destDevId).release();
 
-                    do_the_TRANSFER(transfer, idx_spaceType);
+                    do_the_TRANSFER(transfer, idxOfMySpace);
 
                     // Po skonczeniu perform zmieniamy w mapie przyporzadkowanie componentow do device
                     // i ustawiamy ze komponent nie jest juz transferowany

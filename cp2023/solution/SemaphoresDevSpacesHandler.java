@@ -22,18 +22,8 @@ public class SemaphoresDevSpacesHandler{
 
     public void acquire(Integer idx, ComponentId compId) throws InterruptedException
     {
-        semSpacesMap.get(idx).second = compId;
         semSpacesMap.get(idx).first.acquire();
-    }
-    public Pair<Integer, DevSpacesTypes> noFreeSpaceAcquire(ComponentId compId, DeviceSpaceHandler devHandler)
-            throws InterruptedException
-    {
-
-        // dziedziczenie sekcji krytycznej:
-        Pair<Integer, DevSpacesTypes> idx_spaceType = devHandler.freedThread_reserveSpace(compId);
-
-        return idx_spaceType;
-
+        semSpacesMap.get(idx).second = compId;
     }
     public void release(ComponentId compId)
     {
