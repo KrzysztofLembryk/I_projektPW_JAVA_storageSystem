@@ -18,6 +18,7 @@ public class StorageSystem implements cp2023.base.StorageSystem {
     private final Map<DeviceId, Integer> deviceCapacityMap;
     private final Map<ComponentId, DeviceId> compInDevPlacement;
     private final Map<ComponentId, Boolean> isCompBeingTransfered;
+    private final Map<ComponentId, Semaphore> semaphoreComponentTransfer;
     // deviceSpacseMap - knows if there are free to use spaces on device or not
     private final Map<DeviceId, DeviceSpaceHandler> deviceSpacesMap;
     private final Map<DeviceId, Semaphore> semaphoresDev;
@@ -38,7 +39,7 @@ public class StorageSystem implements cp2023.base.StorageSystem {
         cycleHandler = new CycleHandler(deviceTotalSlots);
         semaphoreCycle = new Semaphore(1, true);
 
-
+        semaphoreComponentTransfer = new ConcurrentHashMap<>();
         isCompBeingTransfered = new HashMap<>();
         for(ComponentId compId : componentPlacement.keySet())
             isCompBeingTransfered.put(compId, false);
@@ -215,6 +216,9 @@ public class StorageSystem implements cp2023.base.StorageSystem {
         // transfer typu remove mozemy od razu przygotowac, bo komponent ma juz
         // miejsce na urzadzeniu
 
+        semaphoreCycle.acquire();
+
+        cycleHandler.queue_removeFront(srcDevId);
 
         semaphoresDev.get(srcDevId).acquire();
         // po prepare zwalniamy miejsce na urzadzeniu zeby ktos mogl juz je zajac
@@ -223,6 +227,8 @@ public class StorageSystem implements cp2023.base.StorageSystem {
         semaphoreQueueForDevSpaces.get(srcDevId).release();
 
         semaphoresDev.get(srcDevId).release();
+
+        semaphoreCycle.release();
 
         transfer.prepare();
 
@@ -267,11 +273,22 @@ public class StorageSystem implements cp2023.base.StorageSystem {
                 semaphoreCheckTransfer.release();
             }
 
+            semaphoreComponentTransfer.put(compId, new Semaphore(0, true));
+
             switch (transferType) {
                 case ADD -> {
 
+                    semaphoreCycle.acquire();
+                    cycleHandler.cycleExist(srcDevId, destDevId, compId);
+                    semaphoreCycle.release();
+
                     // we wait for place on destDevice
                     semaphoreQueueForDevSpaces.get(destDevId).acquire();
+
+                    // po otrzymaniu miejsca zwalniamy sie z kolejki oczekujacej na miejsce
+                    semaphoreCycle.acquire();
+                    cycleHandler.queue_removeFront(destDevId, compId);
+                    semaphoreCycle.release();
 
                     // Tylko jeden transfer w danej chwili moze miec przydzielane wolne miejsce
                     semaphoresDev.get(destDevId).acquire();
