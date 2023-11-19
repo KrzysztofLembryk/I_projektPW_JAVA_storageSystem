@@ -18,13 +18,10 @@ public class StorageSystem implements cp2023.base.StorageSystem {
     private final Map<ComponentId, Boolean> isCompBeingTransfered;
     private final Map<ComponentId, Semaphore> semaphoreComponentTransfer;
     // deviceSpacseMap - knows if there are free to use spaces on device or not
-    private final Map<DeviceId, DeviceSpaceHandler> deviceSpacesMap;
-    private final Map<DeviceId, Semaphore> semaphoresDev;
-    //private Map<DeviceId, Semaphore> semaphoresDevSpaces;
+    private final Map<DeviceId, DeviceSpaceHandler> devSpacesHandlerMap;
+    private final Map<DeviceId, Semaphore> semaphoresAccessDev;
     private final Semaphore semaphoreCheckTransfer;
     private final Map<DeviceId, SemaphoresDevSpacesHandler> semaphoresDevSpaces;
-    private final Map<DeviceId, Semaphore> semaphoreQueueForDevSpaces;
-    //private final CycleHandler cycleHandler;
     private final Semaphore semaphoreGraph;
     private Graph transferGraph;
 
@@ -42,7 +39,8 @@ public class StorageSystem implements cp2023.base.StorageSystem {
             Integer freeSpaces = devFreeSpaces.get(currDev);
             devFreeSpaces.put(currDev, freeSpaces - 1);
         }
-        transferGraph = new Graph(devFreeSpaces, semaphoreComponentTransfer);
+        transferGraph = new Graph(devFreeSpaces, semaphoreComponentTransfer, devSpacesHandlerMap,
+                semaphoresAccessDev);
     }
 
     public StorageSystem(Map<DeviceId, Integer> deviceTotalSlots,
@@ -52,11 +50,11 @@ public class StorageSystem implements cp2023.base.StorageSystem {
         this.deviceTotalSlots = deviceTotalSlots;
         compInDevPlacement = componentPlacement;
 
-        //cycleHandler = new CycleHandler(deviceTotalSlots);
         semaphoreGraph = new Semaphore(1, true);
 
         semaphoreComponentTransfer = new ConcurrentHashMap<>();
         isCompBeingTransfered = new HashMap<>();
+
         for(ComponentId compId : componentPlacement.keySet())
             isCompBeingTransfered.put(compId, false);
 
@@ -66,20 +64,16 @@ public class StorageSystem implements cp2023.base.StorageSystem {
         semaphoreCheckTransfer = new Semaphore(1, true);
 
         // semaphoresDev - mapa semaforow ktore pilnuja dostepu do devices, z permit=1
-        semaphoresDev = new ConcurrentHashMap<>();
-        semaphoreQueueForDevSpaces = new ConcurrentHashMap<>();
-        // semaphoreCanICheckDevSpace -
-        //semaphoreCanICheckDevSpace = new ConcurrentHashMap<>();
+        semaphoresAccessDev = new ConcurrentHashMap<>();
 
         for(DeviceId devId : deviceTotalSlots.keySet()) {
-            semaphoresDev.put(devId, new Semaphore(1, true));
-            semaphoreQueueForDevSpaces.put(devId, new Semaphore(deviceTotalSlots.get(devId), true));
+            semaphoresAccessDev.put(devId, new Semaphore(1, true));
         }
 
         // deviceSpacesMap - dla danego device trzyma devSpaceHandler w ktorym jest mapa
         // trzymajaca informacje ktore miejsca na urzadzeniu (0,...,capacity-1) sa zajete/wolne
         // i przez jakie komponenty sa one zajete.
-        deviceSpacesMap = new ConcurrentHashMap<>();
+        devSpacesHandlerMap = new ConcurrentHashMap<>();
 
         // Podobnie jak deviceSpaceMap trzyma mape analogiczna mape miejsc na danym urzadzeniu
         // tylko tym razem dla danego miejsca (0,...,capacity-1) trzyma semafor ktory wpuszcza
@@ -91,22 +85,19 @@ public class StorageSystem implements cp2023.base.StorageSystem {
             {
                 Integer capacity = this.deviceTotalSlots.get(devId);
                 semaphoresDevSpaces.put(devId, new SemaphoresDevSpacesHandler(capacity));
-                deviceSpacesMap.put(devId, new DeviceSpaceHandler(capacity));
-                //System.out.println("storageConstructor: " + devId + ", capacity: " + capacity);
+                devSpacesHandlerMap.put(devId, new DeviceSpaceHandler(capacity));
             }
-
             // zajmujemy miejsca na urzadzeniach i semaforach
             for(ComponentId compId : compInDevPlacement.keySet())
             {
                 DeviceId devId = compInDevPlacement.get(compId);
                 // dostajemy indeks zajetego miejsca na urzadzeniu
                 Integer idx =
-                        deviceSpacesMap.get(devId).init_spaces_reservation(compId);
+                        devSpacesHandlerMap.get(devId).init_spaces_reservation(compId);
                 // zajmujemy semafor tego miejsca
                 semaphoresDevSpaces.get(devId).acquire(idx, compId);
                 // zmniejszamy liczbe dostepnych miejsc na semaforze kolejka
                 // na ktorym ustawiaja sie i czekaja transfery na miejsca
-                semaphoreQueueForDevSpaces.get(devId).acquire();
             }
             initGraph();
         }
@@ -199,14 +190,16 @@ public class StorageSystem implements cp2023.base.StorageSystem {
         // wlasnie transferuje, wiec mozemy zrobic od razu prepare, ale z perform
         // musimy zaczekac az ten ktos skonczy swoje prepare i zwolni nam semafor
 
-        semaphoresDev.get(srcDevId).acquire();
-        // ustawiamy ze na naszym srcDev nasze miejsce jest ok do zarezerowania
-        // musimy to zrobic przed naszym prepare, zeby inny transfer mogl zrobic
-        // swoje prepare
-        deviceSpacesMap.get(srcDevId).freeSpace(compId);
-        semaphoreQueueForDevSpaces.get(srcDevId).release();
-
-        semaphoresDev.get(srcDevId).release();
+        // nie musimy robic devSpaceshandler.freeSpace bo albo byl cykl i nie musimy
+        // nic zwalniac, albo byl remove i dostalismy miejsce i zwolnilismy swoje miejsce juz
+        // w graph, albo bylo od razu wolne na destDev miejsce i tez zwolnilismy je w graph
+//        semaphoresAccessDev.get(srcDevId).acquire();
+//        // ustawiamy ze na naszym srcDev nasze miejsce jest ok do zarezerowania
+//        // musimy to zrobic przed naszym prepare, zeby inny transfer mogl zrobic
+//        // swoje prepare
+//        devSpacesHandlerMap.get(srcDevId).freeSpace(compId);
+//
+//        semaphoresAccessDev.get(srcDevId).release();
 
         transfer.prepare();
 
@@ -219,6 +212,16 @@ public class StorageSystem implements cp2023.base.StorageSystem {
         semaphoresDevSpaces.get(destDevId).acquire(idxOfMySpace, compId);
         transfer.perform();
 
+        semaphoreComponentTransfer.remove(compId);
+
+        semaphoreCheckTransfer.acquire();
+
+        isCompBeingTransfered.put(compId, false);
+        compInDevPlacement.put(compId, destDevId);
+
+        semaphoreCheckTransfer.release();
+
+
     }
 
     private void do_REMOVING(ComponentTransfer transfer)
@@ -230,29 +233,25 @@ public class StorageSystem implements cp2023.base.StorageSystem {
 
         // transfer typu remove mozemy od razu przygotowac, bo komponent ma juz
         // miejsce na urzadzeniu
-
-        semaphoreGraph.acquire();
-
-        //cycleHandler.queue_removeFront(srcDevId);
-
-        semaphoresDev.get(srcDevId).acquire();
-        // po prepare zwalniamy miejsce na urzadzeniu zeby ktos mogl juz je zajac
-        deviceSpacesMap.get(srcDevId).freeSpace(compId);
-        // teraz zwalniamy miejsce na kolejce
-        semaphoreQueueForDevSpaces.get(srcDevId).release();
-
-        semaphoresDev.get(srcDevId).release();
-
-        semaphoreGraph.release();
-
         transfer.prepare();
-
         // wiec transfer bedzie mogl zrobic swoje prepare, ale dopiero jak zwolnimy
         // semaphoreDevSpaces to bedzie mogl zrobic preform
         semaphoresDevSpaces.get(srcDevId).release(compId);
 
         // jak juz zwolnimy semafor to robimy swoj perform
         transfer.perform();
+
+        // po zrobieniu perform usuwamy nasz komponent z mapy sprawdzajacej czy komponent jest
+        // transferowany, z mapy komponentow i nasz semafor dla komponentu
+
+        semaphoreComponentTransfer.remove(compId);
+
+        semaphoreCheckTransfer.acquire();
+
+        isCompBeingTransfered.remove(compId);
+        compInDevPlacement.remove(compId);
+
+        semaphoreCheckTransfer.release();
     }
     private void do_ADDING(ComponentTransfer transfer, Integer idxOfMySpace) throws InterruptedException
     {
@@ -265,6 +264,22 @@ public class StorageSystem implements cp2023.base.StorageSystem {
         transfer.prepare();
         semaphoresDevSpaces.get(destDevId).acquire(idxOfMySpace, compId);
         transfer.perform();
+
+        // usuwamy nasz semafor bo nasz transfer juz praktycznie sie skonczyl
+        // jak przyjdzie nowy transfer to na poczatku zrobi put i da nowy semafor
+        semaphoreComponentTransfer.remove(compId);
+
+        // Jak skonczylismy juz robic performa dla naszego komponentu to mozemy
+        // zmienic ze juz transfer na tym komponencie nie jest wykonywany.
+        // Przed wprowadzeniem zmian dotyczacych componentu w naszym systemie
+        // musimy zapewnic ze nikt aktualnie nie sprawdza czy dany komponent istnieje
+        // w naszym systemie itp, bo po wykonaniu transferu moze on juz nie istniec.
+        semaphoreCheckTransfer.acquire();
+
+        isCompBeingTransfered.put(compId, false);
+        compInDevPlacement.put(compId, destDevId);
+
+        semaphoreCheckTransfer.release();
     }
 
 
@@ -294,53 +309,33 @@ public class StorageSystem implements cp2023.base.StorageSystem {
                 case ADD -> {
 
                     semaphoreGraph.acquire();
-                    //cycleHandler.cycleExist(srcDevId, destDevId, compId);
+
+                    transferGraph.checkCycle(srcDevId, destDevId, compId);
+
                     semaphoreGraph.release();
 
-                    // we wait for place on destDevice
-                    semaphoreQueueForDevSpaces.get(destDevId).acquire();
-
-                    // po otrzymaniu miejsca zwalniamy sie z kolejki oczekujacej na miejsce
-                    semaphoreGraph.acquire();
-                    //cycleHandler.queue_removeFront(destDevId, compId);
-                    semaphoreGraph.release();
-
+                    semaphoreComponentTransfer.get(compId).acquire();
                     // Tylko jeden transfer w danej chwili moze miec przydzielane wolne miejsce
-                    semaphoresDev.get(destDevId).acquire();
+                    semaphoresAccessDev.get(destDevId).acquire();
+
                     Integer idxOfMySpace =
-                            deviceSpacesMap.get(destDevId).reserveSpace(compId);
-                    semaphoresDev.get(destDevId).release();
+                            devSpacesHandlerMap.get(destDevId).reserveSpace(compId);
+
+                    semaphoresAccessDev.get(destDevId).release();
 
                     do_ADDING(transfer,idxOfMySpace);
-
-                    // Jak skonczylismy juz robic performa dla naszego komponentu to mozemy
-                    // zmienic ze juz transfer na tym komponencie nie jest wykonywany.
-                    // Przed wprowadzeniem zmian dotyczacych componentu w naszym systemie
-                    // musimy zapewnic ze nikt aktualnie nie sprawdza czy dany komponent istnieje
-                    // w naszym systemie itp, bo po wykonaniu transferu moze on juz nie istniec.
-                    semaphoreCheckTransfer.acquire();
-
-                    isCompBeingTransfered.put(compId, false);
-                    compInDevPlacement.put(compId, destDevId);
-
-                    semaphoreCheckTransfer.release();
                 }
                 case REMOVE -> {
 
+                    semaphoreGraph.acquire();
+
+                    transferGraph.freeSpaceOnDev(srcDevId, compId);
+
+                    semaphoreGraph.release();
+
                     do_REMOVING(transfer);
-
-                    // po zrobieniu perform usuwamy z mapy sprawdzajacej czy komponent jest
-                    // transferowany i z mapy komponentow nasz komponent
-                    semaphoreCheckTransfer.acquire();
-
-                    isCompBeingTransfered.remove(compId);
-                    compInDevPlacement.remove(compId);
-
-                    semaphoreCheckTransfer.release();
                 }
                 case TRANSFER -> {
-
-                    Integer idxOfMySpace;
 
                     semaphoreGraph.acquire();
 
@@ -353,11 +348,10 @@ public class StorageSystem implements cp2023.base.StorageSystem {
                     // nie ma z nami cyklu to zwalniamy semafor i ustawiamy sie na kolejce czekania
                     // na miejsce na urzadzenie
 
-                    semaphoresDev.get(destDevId).acquire();
-                    idxOfMySpace =
-                            deviceSpacesMap.get(destDevId).reserveSpace(compId);
-                    semaphoresDev.get(destDevId).release();
-
+                    semaphoresAccessDev.get(destDevId).acquire();
+                    Integer idxOfMySpace =
+                            devSpacesHandlerMap.get(destDevId).reserveSpace(compId);
+                    semaphoresAccessDev.get(destDevId).release();
 
 
                     do_the_TRANSFER(transfer, idxOfMySpace);
@@ -375,12 +369,7 @@ public class StorageSystem implements cp2023.base.StorageSystem {
 
                     // Po skonczeniu perform zmieniamy w mapie przyporzadkowanie componentow do device
                     // i ustawiamy ze komponent nie jest juz transferowany
-                    semaphoreCheckTransfer.acquire();
 
-                    isCompBeingTransfered.put(compId, false);
-                    compInDevPlacement.put(compId, destDevId);
-
-                    semaphoreCheckTransfer.release();
                 }
                 case WRONG -> System.out.println("raczej nigdy tu nie wejdziemy :)");
             }

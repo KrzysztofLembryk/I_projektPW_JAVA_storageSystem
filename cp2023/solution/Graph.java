@@ -3,9 +3,9 @@ package cp2023.solution;
 import cp2023.base.ComponentId;
 import cp2023.base.DeviceId;
 
-import java.awt.*;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Stack;
 import java.util.Vector;
 import java.util.concurrent.Semaphore;
 
@@ -13,8 +13,13 @@ public class Graph {
     private Map<DeviceId, Node> dev_nodes_map;
     private Map<DeviceId, Integer> dev_freeSpaces;
     private final Map<ComponentId, Semaphore> semaphoreComponentTransfer;
-    public Graph(Map<DeviceId, Integer> devFreeSlots, Map<ComponentId, Semaphore> semaphoreComponentTransfer)
+    private final Map<DeviceId, Semaphore> semaphoresAccesDevice;
+    private final Map<DeviceId, DeviceSpaceHandler> devSpacesHandlerMap;
+    public Graph(Map<DeviceId, Integer> devFreeSlots, Map<ComponentId, Semaphore> semaphoreComponentTransfer,
+                 Map<DeviceId, DeviceSpaceHandler> devSpacesHandlerMap, Map<DeviceId, Semaphore> semAccessDev)
     {
+        this.semaphoresAccesDevice = semAccessDev;
+        this.devSpacesHandlerMap = devSpacesHandlerMap;
         this.semaphoreComponentTransfer = semaphoreComponentTransfer;
         dev_nodes_map = new HashMap<>();
         dev_freeSpaces = new HashMap<>();
@@ -82,22 +87,69 @@ public class Graph {
         return dev_nodes_map.get(destDev).addEdge(null, compId);
     }
 
-    private void removeCycle(Map<DeviceId, Pair<Boolean, Integer>> recursionStack) throws Exception
+    private void removeEdgesOfCycle_createStack(Map<DeviceId, Pair<Boolean, Integer>> recursionStack,
+                                                Stack<Pair<DeviceId, ComponentId>> cycleStack_srcToDest,
+                                                Vector<ComponentId> vecCompToFree,
+                                                DeviceId startingDev) throws Exception
     {
-        //System.out.printf("Usuwam komponenty z cyklu: ");
-        for(DeviceId devId : recursionStack.keySet())
-        {
-            Pair<Boolean, Integer> inCycle_priorityIdx = recursionStack.get(devId);
-            if(inCycle_priorityIdx.first)
-            {
-                ComponentId compId = dev_nodes_map.get(devId).removeEdge(inCycle_priorityIdx.second);
-                semaphoreComponentTransfer.get(compId).release();
-                //System.out.printf(compId + " ");
-            }
-        }
-        //System.out.println();
+        DeviceId currDev = startingDev;
+        do{
+            // Idziemy cyklem skierowanym ale do tylu.
+            // Dostajemy numer node'a ktory chce do nas sie transferowac
+            Pair<Boolean, Integer> inCycle_priorityIdx = recursionStack.get(currDev);
+
+            // Usuwamy te krawedz z cyklu, ale robiac to dostajemy jaki komponent
+            // chcial przyjsc na currDev i z jakiego urzadzenia
+            Pair<ComponentId, DeviceId> compId_srcDev =
+                    dev_nodes_map.get(currDev).removeEdge(inCycle_priorityIdx.second);
+
+            // zapamietujemy komponent, zeby potem zrobic release na semaforach
+            vecCompToFree.add(compId_srcDev.first);
+
+            // dodajemy do stosu pare destDevice i komponent ktory chce przyjsc do destDevice
+            cycleStack_srcToDest.push(new Pair<>(currDev, compId_srcDev.first));
+
+            // cofamy sie w cyklu do srcDev z ktorego chcielismy transferowac compId
+            currDev = compId_srcDev.second;
+
+        }while(!currDev.equals(startingDev));
     }
-    public void freeSpaceOnDev(DeviceId devId)
+
+    private void switchCompPlacesOnDevices(Stack<Pair<DeviceId, ComponentId>> cycleStack_srcToDest)
+    {
+        Pair<DeviceId, ComponentId> start = cycleStack_srcToDest.pop();
+        Pair<DeviceId, ComponentId> src = start;
+
+        while(!cycleStack_srcToDest.empty())
+        {
+            Pair<DeviceId, ComponentId> dest = cycleStack_srcToDest.pop();
+            // Teraz robimy transfer z src do dest, nie musi to byc w sekcji krytycznej
+            // bo nawet jak bedzie jakis przeplot to wiemy ze nie moze byc jednoczesnie
+            // dwoch transferow tego samego komponentu, a my zmieniamy tylko miejsce gdzie
+            // ten nasz dest komponent jest.
+            devSpacesHandlerMap.get(dest.first).reserveSpaceCycle(src.second, dest.second);
+            src = dest;
+        }
+        // teraz jeszce musimy zrobic z src do start
+        devSpacesHandlerMap.get(start.first).reserveSpaceCycle(src.second, start.second);
+    }
+    private void removeCycle(Map<DeviceId, Pair<Boolean, Integer>> recursionStack,
+                             DeviceId startingDev) throws Exception
+    {
+        Stack<Pair<DeviceId, ComponentId>> cycleStack_srcToDest = new Stack<>();
+        Vector<ComponentId> vecCompToFree = new Vector<>();
+
+        removeEdgesOfCycle_createStack(recursionStack, cycleStack_srcToDest, vecCompToFree, startingDev);
+
+        switchCompPlacesOnDevices(cycleStack_srcToDest);
+
+        // teraz uwalniamy semafory transferow jak juz maja miejsca na device ustalone
+        for(ComponentId comp : vecCompToFree)
+            semaphoreComponentTransfer.get(comp).release();
+
+    }
+    public void freeSpaceOnDev(DeviceId devId, ComponentId compToRemove)
+            throws  InterruptedException
     {
         // zdejmujemy z grafu transfer o najwiekszym priorytecie na devId
         // tylko transfer typu REMOVE moze to zrobic bo zwalnia miejsce
@@ -105,13 +157,35 @@ public class Graph {
         {
          Integer freeSpaces = dev_freeSpaces.get(devId);
          dev_freeSpaces.put(devId, freeSpaces + 1);
+
+         // jako ze zmieniamy na null i ktos w tym samym czasie moglby szukac miejsca
+         // i nie znalezc a miejsce jest tak naprawde wolne, wiec musi byc s krytyczna.
+         semaphoresAccesDevice.get(devId).acquire();
+         devSpacesHandlerMap.get(devId).freeSpace(compToRemove);
+         semaphoresAccesDevice.get(devId).release();
+
         }
         else
         {
             try
             {
-                ComponentId compId = dev_nodes_map.get(devId).removeEdge(0);
-                semaphoreComponentTransfer.get(compId).release();
+                Pair<ComponentId, DeviceId> newComp_srcDev = dev_nodes_map.get(devId).removeEdge(0);
+
+                // skoro ktos czeka na miejsce i je zaraz dostanie, to musi zwolnic swoje miejsce
+                // chyba ze czeka transfer ADD, to on jako srcDev ma null wiec nie trzeba nic zwalniac
+                if(newComp_srcDev.second != null)
+                {
+                    semaphoresAccesDevice.get(newComp_srcDev.second).acquire();
+
+                    devSpacesHandlerMap.get(newComp_srcDev.second).freeSpace(newComp_srcDev.first);
+
+                    semaphoresAccesDevice.get(newComp_srcDev.second).release();
+                }
+
+                // tutaj nie musi byc sekcji krytycznej bo robimy zamiane, a componenty sa unikatowe
+                devSpacesHandlerMap.get(devId).reserveSpaceCycle(newComp_srcDev.first, compToRemove);
+
+                semaphoreComponentTransfer.get(newComp_srcDev.first).release();
             }
             catch(Exception e)
             {
@@ -120,20 +194,36 @@ public class Graph {
         }
     }
     public void checkCycle(DeviceId srcDev, DeviceId destDev, ComponentId compId)
+            throws InterruptedException
     {
         // jesli jest miejsce na urzadzeniu to nie dodajemy nic do grafu, tylko przepuszczamy
-        // ten transfer i zmniejszamy dostepne miejsce na destDev.
+        // ten transfer i zmniejszamy dostepne miejsce na destDev i wpisujemy ten component
+        // na pierwsze wolne miejsce w devSpaces.
         if(dev_freeSpaces.get(destDev) > 0)
         {
-            Integer freeSpaces = dev_freeSpaces.get(destDev);
+            Integer freeSpaces = dev_freeSpaces.get(srcDev);
+            dev_freeSpaces.put(srcDev, freeSpaces + 1);
+
+            semaphoresAccesDevice.get(srcDev).acquire();
+            devSpacesHandlerMap.get(srcDev).freeSpace(compId);
+            semaphoresAccesDevice.get(srcDev).release();
+
+            freeSpaces = dev_freeSpaces.get(destDev);
             dev_freeSpaces.put(destDev, freeSpaces - 1);
+
+            semaphoresAccesDevice.get(destDev).acquire();
+            devSpacesHandlerMap.get(destDev).reserveSpace(compId);
+            semaphoresAccesDevice.get(destDev).release();
+
             semaphoreComponentTransfer.get(compId).release();
         }
         else {
             // Nie ma miejsca na destDev, wiec
             // Uzyjemy algorytmu dfs do znalezienia cyklu w naszym grafie
             Integer myIdx = addTransfer(srcDev, destDev, compId);
+
             Map<DeviceId, Boolean> visited = new HashMap<>();
+
             // potrzebujemy wiedziec jeszcze jaki indeks transferu jest w naszym cyklu
             Map<DeviceId, Pair<Boolean, Integer>> recursionStack = new HashMap<>();
 
@@ -146,8 +236,9 @@ public class Graph {
                 //System.out.println("JEST CYKL");
                 // jesli znajdziemy cykl to go usuwamy i wypuszczamy czekajce na semaforach transfery
                 try {
-                    removeCycle(recursionStack);
-                } catch (Exception e) {
+                    removeCycle(recursionStack, destDev);
+                }
+                catch (Exception e) {
                     System.out.println("Graph - checkCycle - " + e);
                 }
                 //System.out.println("Transfer domykajacy: " + srcDev + " -> " + destDev + ", komponentu: " + compId);
@@ -185,7 +276,7 @@ public class Graph {
         semaphoreComponentTransfer.put(comp3, new Semaphore(0, true));
         semaphoreComponentTransfer.put(comp4, new Semaphore(0, true));
 
-        Graph g1 = new Graph(devTotalSlots, semaphoreComponentTransfer);
+        //Graph g1 = new Graph(devTotalSlots, semaphoreComponentTransfer);
         // ta czesc okej
 //        g1.checkCycle(d1, d2, comp1);
 //        g1.checkCycle(d2, d1, comp2);

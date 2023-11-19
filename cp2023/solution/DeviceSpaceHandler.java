@@ -4,21 +4,21 @@ import cp2023.base.ComponentId;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 
 public class DeviceSpaceHandler {
     private final Integer size;
-    private Map<Integer, Pair<DevSpacesTypes, ComponentId>> mapOfDevSpaces;
-    private Semaphore semaphoreWaitForReleased = new Semaphore(0, true);
+    private Map<Integer, ComponentId> mapOfDevSpaces;
     public DeviceSpaceHandler(Integer size)
     {
         // occupied is less than size, StorageSysFactory ensures that
         this.size = size;
-        mapOfDevSpaces = new HashMap<>();
+        mapOfDevSpaces = new ConcurrentHashMap<>();
 
         for(int i = 0; i < size; i++)
         {
-           mapOfDevSpaces.put(i, new Pair<>(DevSpacesTypes.FREE, null));
+           mapOfDevSpaces.put(i,  null);
         }
 
     }
@@ -27,10 +27,9 @@ public class DeviceSpaceHandler {
     {
         if(initIdx < size)
         {
-            if(mapOfDevSpaces.get(initIdx).first == DevSpacesTypes.FREE)
+            if(mapOfDevSpaces.get(initIdx) == null)
             {
-                mapOfDevSpaces.get(initIdx).first = DevSpacesTypes.OCCUPIED;
-                mapOfDevSpaces.get(initIdx).second = compId;
+                mapOfDevSpaces.put(initIdx,  compId);
                 initIdx += 1;
                 return initIdx - 1;
             }
@@ -41,11 +40,16 @@ public class DeviceSpaceHandler {
     public Integer reserveSpace(ComponentId compId)
             throws InterruptedException
     {
+        // najpierw sprawdzamy czy juz nie mamy miejsca w destdev
+        // moglo sie tak zdarzyc gdy byl cykl
         for(int i = 0; i < size; i++) {
-            if (mapOfDevSpaces.get(i).first == DevSpacesTypes.FREE) {
-
-                mapOfDevSpaces.get(i).first = DevSpacesTypes.OCCUPIED;
-                mapOfDevSpaces.get(i).second = compId;
+            if (mapOfDevSpaces.get(i).equals(compId)) {
+                return i;
+            }
+        }
+        for(int i = 0; i < size; i++) {
+            if (mapOfDevSpaces.get(i) == null) {
+                mapOfDevSpaces.put(i, compId);
                 return i;
             }
         }
@@ -53,36 +57,24 @@ public class DeviceSpaceHandler {
         System.out.println("Jakims cudem devSpaceHandler return W reserveSpace po for sie zrobilo");
         return -1;
     }
-    public Integer reserveSpaceCycle(ComponentId myCompId, ComponentId destCompId)
+    public Integer reserveSpaceCycle(ComponentId newCompId, ComponentId oldCompId)
     {
         for(int i = 0; i < size; i++) {
-            if(mapOfDevSpaces.get(i).second != null &&
-                    mapOfDevSpaces.get(i).second.equals(destCompId)){
-
-                mapOfDevSpaces.get(i).first = DevSpacesTypes.CYCLE_RESERVED;
-                mapOfDevSpaces.get(i).second = myCompId;
+            if(mapOfDevSpaces.get(i).equals(oldCompId)){
+                mapOfDevSpaces.put(i, newCompId);
                 return i;
             }
         }
         return -1;
     }
-    public void freeSpace(ComponentId compId) throws InterruptedException
+    public void freeSpace(ComponentId compId)
     {
         // we free occupied space by us
         for(int i = 0; i < size; i++)
         {
-            if(mapOfDevSpaces.get(i).second != null &&
-                    mapOfDevSpaces.get(i).second.equals(compId))
+            if(mapOfDevSpaces.get(i).equals(compId))
             {
-                if(mapOfDevSpaces.get(i).first != DevSpacesTypes.CYCLE_RESERVED)
-                {
-                    mapOfDevSpaces.get(i).second = null;
-                    mapOfDevSpaces.get(i).first = DevSpacesTypes.FREE;
-                }
-                else
-                {
-                    mapOfDevSpaces.get(i).first = DevSpacesTypes.OCCUPIED;
-                }
+                mapOfDevSpaces.put(i, null);
                 break;
             }
         }
