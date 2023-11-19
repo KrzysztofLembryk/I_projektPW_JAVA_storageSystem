@@ -151,12 +151,18 @@ public class Graph {
             semaphoreComponentTransfer.get(comp).release();
 
     }
+    // metoda freeSpaceOnDev musi rekurencyjnie zwolnic ciag miejsc
+    // bo jesli mamy T1:A->B, T2:B->C i na D jest miejsce i przychodzi transfer T3:C->D
+    // to ten transfer zwalnia swoje miejsce na C, wpuszcza T2 ale T2 tez musi zwolnic
+    // swoje miejsce i wpuscic na semafor T1. Zatrzymamy sie albo na transferze ADD
+    // albo gdy nie bedzie juz transferu zadnego i tylko zwolnimy miejsce
     public void freeSpaceOnDev(DeviceId devId, ComponentId compToRemove)
             throws  InterruptedException
     {
+        Node currentNode = dev_nodes_map.get(devId);
         // zdejmujemy z grafu transfer o najwiekszym priorytecie na devId
         // tylko transfer typu REMOVE moze to zrobic bo zwalnia miejsce
-        if(dev_nodes_map.get(devId).noTransfersToMe())
+        if(!currentNode.equals(nullNode) && currentNode.noTransfersToMe())
         {
          Integer freeSpaces = dev_freeSpaces.get(devId);
          dev_freeSpaces.put(devId, freeSpaces + 1);
@@ -168,25 +174,16 @@ public class Graph {
          semaphoresAccesDevice.get(devId).release();
 
         }
-        else
+        else if(!currentNode.noTransfersToMe())
         {
             try
             {
-                Pair<ComponentId, DeviceId> newComp_srcDev = dev_nodes_map.get(devId).removeEdge(0);
-
-                // skoro ktos czeka na miejsce i je zaraz dostanie, to musi zwolnic swoje miejsce
-                // chyba ze czeka transfer ADD, to on jako srcDev ma null wiec nie trzeba nic zwalniac
-                if(!newComp_srcDev.second.equals(nullDevice))
-                {
-                    semaphoresAccesDevice.get(newComp_srcDev.second).acquire();
-
-                    devSpacesHandlerMap.get(newComp_srcDev.second).freeSpace(newComp_srcDev.first);
-
-                    semaphoresAccesDevice.get(newComp_srcDev.second).release();
-                }
+                Pair<ComponentId, DeviceId> newComp_srcDev = currentNode.removeEdge(0);
 
                 // tutaj nie musi byc sekcji krytycznej bo robimy zamiane, a componenty sa unikatowe
                 devSpacesHandlerMap.get(devId).reserveSpaceCycle(newComp_srcDev.first, compToRemove);
+
+                freeSpaceOnDev(newComp_srcDev.second, newComp_srcDev.first);
 
                 semaphoreComponentTransfer.get(newComp_srcDev.first).release();
             }
@@ -204,24 +201,21 @@ public class Graph {
         // na pierwsze wolne miejsce w devSpaces.
         if(dev_freeSpaces.get(destDev) > 0)
         {
-            Integer freeSpaces;
-            if(srcDev != null)
-            {
-                freeSpaces = dev_freeSpaces.get(srcDev);
-                dev_freeSpaces.put(srcDev, freeSpaces + 1);
-
-                semaphoresAccesDevice.get(srcDev).acquire();
-                devSpacesHandlerMap.get(srcDev).freeSpace(compId);
-                semaphoresAccesDevice.get(srcDev).release();
-            }
-
-            freeSpaces = dev_freeSpaces.get(destDev);
+            // najpierw zajmujemy swoje miejsce
+            Integer freeSpaces = dev_freeSpaces.get(destDev);
             dev_freeSpaces.put(destDev, freeSpaces - 1);
 
             semaphoresAccesDevice.get(destDev).acquire();
             devSpacesHandlerMap.get(destDev).reserveSpace(compId);
             semaphoresAccesDevice.get(destDev).release();
 
+            if(srcDev != null)
+            {
+                // teraz rekurencyjnie zwalniamy miejsca na srcDev
+                freeSpaceOnDev(srcDev, compId);
+            }
+
+            // na koniec zwalniamy swoj semafor
             semaphoreComponentTransfer.get(compId).release();
         }
         else {
