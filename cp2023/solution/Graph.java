@@ -204,12 +204,16 @@ public class Graph {
         // na pierwsze wolne miejsce w devSpaces.
         if(dev_freeSpaces.get(destDev) > 0)
         {
-            Integer freeSpaces = dev_freeSpaces.get(srcDev);
-            dev_freeSpaces.put(srcDev, freeSpaces + 1);
+            Integer freeSpaces;
+            if(srcDev != null)
+            {
+                freeSpaces = dev_freeSpaces.get(srcDev);
+                dev_freeSpaces.put(srcDev, freeSpaces + 1);
 
-            semaphoresAccesDevice.get(srcDev).acquire();
-            devSpacesHandlerMap.get(srcDev).freeSpace(compId);
-            semaphoresAccesDevice.get(srcDev).release();
+                semaphoresAccesDevice.get(srcDev).acquire();
+                devSpacesHandlerMap.get(srcDev).freeSpace(compId);
+                semaphoresAccesDevice.get(srcDev).release();
+            }
 
             freeSpaces = dev_freeSpaces.get(destDev);
             dev_freeSpaces.put(destDev, freeSpaces - 1);
