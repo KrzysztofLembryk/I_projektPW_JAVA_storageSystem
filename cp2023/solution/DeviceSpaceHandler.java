@@ -18,7 +18,6 @@ public class DeviceSpaceHandler {
 
         for(int i = 0; i < size; i++)
         {
-            System.out.println("chuj");
             // I assume that devices ids are positive numbers, so Integer Min_Val
             // means that slot is free
             mapOfDevSpaces.put(i,  freeSpace);

@@ -183,9 +183,11 @@ public class Graph {
                 // tutaj nie musi byc sekcji krytycznej bo robimy zamiane, a componenty sa unikatowe
                 devSpacesHandlerMap.get(devId).reserveSpaceCycle(newComp_srcDev.first, compToRemove);
 
+                semaphoreComponentTransfer.get(newComp_srcDev.first).release();
+
                 freeSpaceOnDev(newComp_srcDev.second, newComp_srcDev.first);
 
-                semaphoreComponentTransfer.get(newComp_srcDev.first).release();
+
             }
             catch(Exception e)
             {
