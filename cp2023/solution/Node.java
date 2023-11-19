@@ -31,12 +31,16 @@ public class Node {
         // czyli jaki ma priorytet
         return vecTransfersToMe.size() - 1;
     }
-    protected  ComponentId removeEdge(int idx)
+    protected  ComponentId removeEdge(int idx) throws Exception
     {
-        vecTransfersToMe.remove(idx);
-        ComponentId compId = vecComponentsPriorities.get(idx);
-        vecComponentsPriorities.remove(idx);
-        return compId;
+        if(idx < vecTransfersToMe.size() && idx >= 0)
+        {
+            vecTransfersToMe.remove(idx);
+            ComponentId compId = vecComponentsPriorities.get(idx);
+            vecComponentsPriorities.remove(idx);
+            return compId;
+        }
+        throw new Exception("Node - removeEdge - idx out of bounds");
     }
     protected DeviceId getDevId()
     {

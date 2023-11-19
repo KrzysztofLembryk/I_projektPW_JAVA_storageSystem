@@ -76,9 +76,9 @@ public class Graph {
         return dev_nodes_map.get(destDev).addEdge(null, compId);
     }
 
-    private void removeCycle(Map<DeviceId, Pair<Boolean, Integer>> recursionStack)
+    private void removeCycle(Map<DeviceId, Pair<Boolean, Integer>> recursionStack) throws Exception
     {
-        System.out.printf("Usuwam komponenty z cyklu: ");
+        //System.out.printf("Usuwam komponenty z cyklu: ");
         for(DeviceId devId : recursionStack.keySet())
         {
             Pair<Boolean, Integer> inCycle_priorityIdx = recursionStack.get(devId);
@@ -86,12 +86,26 @@ public class Graph {
             {
                 ComponentId compId = dev_nodes_map.get(devId).removeEdge(inCycle_priorityIdx.second);
                 semaphoreComponentTransfer.get(compId).release();
-                System.out.printf(compId + " ");
+                //System.out.printf(compId + " ");
             }
         }
-        System.out.println();
+        //System.out.println();
     }
+    public void freeSpaceOnDev(DeviceId devId)
+    {
+        // zdejmujemy z grafu transfer o najwiekszym priorytecie na devId
+        // tylko transfer typu REMOVE moze to zrobic bo zwalnia miejsce
+        try
+        {
+            ComponentId compId = dev_nodes_map.get(devId).removeEdge(0);
+            semaphoreComponentTransfer.get(compId).release();
+        }
+        catch(Exception e)
+        {
+            System.out.println("Graph - freeSpaceOnDev - " + e);
+        }
 
+    }
     public void checkCycle(DeviceId srcDev, DeviceId destDev, ComponentId compId)
     {
         // Uzyjemy algorytmu dfs do znalezienia cyklu w naszym grafie
@@ -108,17 +122,23 @@ public class Graph {
 
         if(findCycle_dfs(dev_nodes_map.get(destDev), visited, recursionStack, destDev, myIdx))
         {
-            System.out.println("JEST CYKL");
+            //System.out.println("JEST CYKL");
             // jesli znajdziemy cykl to go usuwamy i wypuszczamy czekajce na semaforach transfery
-            removeCycle(recursionStack);
-
-            System.out.println("Transfer domykajacy: " + srcDev + " -> " + destDev + ", komponentu: " + compId);
+            try
+            {
+                removeCycle(recursionStack);
+            }
+            catch(Exception e)
+            {
+                System.out.println("Graph - checkCycle - " + e);
+            }
+            //System.out.println("Transfer domykajacy: " + srcDev + " -> " + destDev + ", komponentu: " + compId);
         }
-        else
-        {
-            System.out.println("NIE MA CYKLU");
-            System.out.println("Dodalem transfer: " + srcDev + " -> " + destDev + ", komponentu: " + compId);
-        }
+//        else
+//        {
+//            System.out.println("NIE MA CYKLU");
+//            System.out.println("Dodalem transfer: " + srcDev + " -> " + destDev + ", komponentu: " + compId);
+//        }
 
 
     }
