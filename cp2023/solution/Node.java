@@ -35,7 +35,7 @@ public class Node {
     {
         if(idx < vecTransfersToMe.size() && idx >= 0)
         {
-            DeviceId srcDev = vecTransfersToMe.get(idx).devId;
+            DeviceId srcDev = vecTransfersToMe.get(idx).getDevId();
             vecTransfersToMe.remove(idx);
             ComponentId compId = vecComponentsPriorities.get(idx);
             vecComponentsPriorities.remove(idx);
@@ -55,5 +55,13 @@ public class Node {
     protected Vector<Node> getTransfersToMe()
     {
         return vecTransfersToMe;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (! (obj instanceof Node)) {
+            return false;
+        }
+        return this.devId.equals(((Node)obj).devId);
     }
 }

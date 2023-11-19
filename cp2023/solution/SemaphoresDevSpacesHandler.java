@@ -8,6 +8,7 @@ import java.util.concurrent.Semaphore;
 
 public class SemaphoresDevSpacesHandler{
     private final Integer size;
+    private final ComponentId freeSpace = new ComponentId(Integer.MIN_VALUE);
     private Map<Integer, Pair<Semaphore, ComponentId>> semSpacesMap;
 
     public SemaphoresDevSpacesHandler(Integer size) throws InterruptedException
@@ -16,7 +17,7 @@ public class SemaphoresDevSpacesHandler{
         semSpacesMap = new ConcurrentHashMap<>();
 
         for(int i = 0; i < size; i++)
-            semSpacesMap.put(i, new Pair<>(new Semaphore(1, true), null));
+            semSpacesMap.put(i, new Pair<>(new Semaphore(1, true), freeSpace));
 
     }
 
@@ -29,10 +30,9 @@ public class SemaphoresDevSpacesHandler{
     {
         for(int i = 0; i < size; i++)
         {
-            if(semSpacesMap.get(i).second != null &&
-                    semSpacesMap.get(i).second.equals(compId))
+            if(semSpacesMap.get(i).second.equals(compId))
             {
-                semSpacesMap.get(i).second = null;
+                semSpacesMap.get(i).second = freeSpace;
                 semSpacesMap.get(i).first.release();
                 break;
             }

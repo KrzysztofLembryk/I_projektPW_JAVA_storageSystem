@@ -10,6 +10,8 @@ import java.util.Vector;
 import java.util.concurrent.Semaphore;
 
 public class Graph {
+    private final DeviceId nullDevice = new DeviceId(Integer.MIN_VALUE);
+    private final Node nullNode = new Node(nullDevice);
     private Map<DeviceId, Node> dev_nodes_map;
     private Map<DeviceId, Integer> dev_freeSpaces;
     private final Map<ComponentId, Semaphore> semaphoreComponentTransfer;
@@ -29,6 +31,7 @@ public class Graph {
             dev_nodes_map.put(dev, new Node(dev));
             dev_freeSpaces.put(dev, devFreeSlots.get(dev));
         }
+        dev_nodes_map.put(nullDevice, nullNode);
 
     }
 
@@ -36,7 +39,7 @@ public class Graph {
                                   Map<DeviceId, Pair<Boolean, Integer>> recursionStack,
                                   DeviceId finalNode, Integer startingEdgeIdx)
     {
-        if(currNode == null)
+        if(currNode.equals(nullNode))
             return false;
 
         DeviceId currDevId = currNode.getDevId();
@@ -84,7 +87,7 @@ public class Graph {
     {
         if(srcDev != null)
             return dev_nodes_map.get(destDev).addEdge(dev_nodes_map.get(srcDev), compId);
-        return dev_nodes_map.get(destDev).addEdge(null, compId);
+        return dev_nodes_map.get(destDev).addEdge(nullNode, compId);
     }
 
     private void removeEdgesOfCycle_createStack(Map<DeviceId, Pair<Boolean, Integer>> recursionStack,
@@ -173,7 +176,7 @@ public class Graph {
 
                 // skoro ktos czeka na miejsce i je zaraz dostanie, to musi zwolnic swoje miejsce
                 // chyba ze czeka transfer ADD, to on jako srcDev ma null wiec nie trzeba nic zwalniac
-                if(newComp_srcDev.second != null)
+                if(!newComp_srcDev.second.equals(nullDevice))
                 {
                     semaphoresAccesDevice.get(newComp_srcDev.second).acquire();
 

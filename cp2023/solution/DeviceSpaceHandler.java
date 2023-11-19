@@ -9,16 +9,19 @@ import java.util.concurrent.Semaphore;
 
 public class DeviceSpaceHandler {
     private final Integer size;
+    private final ComponentId freeSpace = new ComponentId(Integer.MIN_VALUE);
     private Map<Integer, ComponentId> mapOfDevSpaces;
     public DeviceSpaceHandler(Integer size)
     {
-        // occupied is less than size, StorageSysFactory ensures that
         this.size = size;
         mapOfDevSpaces = new ConcurrentHashMap<>();
 
         for(int i = 0; i < size; i++)
         {
-           mapOfDevSpaces.put(i,  null);
+            System.out.println("chuj");
+            // I assume that devices ids are positive numbers, so Integer Min_Val
+            // means that slot is free
+            mapOfDevSpaces.put(i,  freeSpace);
         }
 
     }
@@ -27,7 +30,7 @@ public class DeviceSpaceHandler {
     {
         if(initIdx < size)
         {
-            if(mapOfDevSpaces.get(initIdx) == null)
+            if(mapOfDevSpaces.get(initIdx).equals(freeSpace))
             {
                 mapOfDevSpaces.put(initIdx,  compId);
                 initIdx += 1;
@@ -48,7 +51,7 @@ public class DeviceSpaceHandler {
             }
         }
         for(int i = 0; i < size; i++) {
-            if (mapOfDevSpaces.get(i) == null) {
+            if (mapOfDevSpaces.get(i).equals(freeSpace)) {
                 mapOfDevSpaces.put(i, compId);
                 return i;
             }
@@ -74,7 +77,7 @@ public class DeviceSpaceHandler {
         {
             if(mapOfDevSpaces.get(i).equals(compId))
             {
-                mapOfDevSpaces.put(i, null);
+                mapOfDevSpaces.put(i, freeSpace);
                 break;
             }
         }
