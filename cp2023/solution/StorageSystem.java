@@ -15,21 +15,18 @@ import java.util.concurrent.Semaphore;
 public class StorageSystem implements cp2023.base.StorageSystem {
     // deviceTotalSlots - stores info about how many components
     // device of given ID can store (deviceID --> capacity).
-    private Map<DeviceId, Integer> deviceCapacityMap;
-    private Map<ComponentId, DeviceId> compInDevPlacement;
-    private Map<ComponentId, Boolean> isCompBeingTransfered;
+    private final Map<DeviceId, Integer> deviceCapacityMap;
+    private final Map<ComponentId, DeviceId> compInDevPlacement;
+    private final Map<ComponentId, Boolean> isCompBeingTransfered;
     // deviceSpacseMap - knows if there are free to use spaces on device or not
-    private Map<DeviceId, DeviceSpaceHandler> deviceSpacesMap;
-    private Map<DeviceId, Semaphore> semaphoresDev;
+    private final Map<DeviceId, DeviceSpaceHandler> deviceSpacesMap;
+    private final Map<DeviceId, Semaphore> semaphoresDev;
     //private Map<DeviceId, Semaphore> semaphoresDevSpaces;
-    private Semaphore semaphoreCheckTransfer;
-
-    // CycleMap stores (srcDev, queue of destDev), meaning from srcDev we want to
-    // transfer  to destDev
-    private Map<DeviceId, Queue<Pair<DeviceId, ComponentId>>> cycleMap;
-    private final Map<DeviceId, Boolean> wasDevChecked;
-    private Map<DeviceId, SemaphoresDevSpacesHandler> semaphoresDevSpaces;
-    private Map<DeviceId, Semaphore> semaphoreQueueForDevSpaces;
+    private final Semaphore semaphoreCheckTransfer;
+    private final Map<DeviceId, SemaphoresDevSpacesHandler> semaphoresDevSpaces;
+    private final Map<DeviceId, Semaphore> semaphoreQueueForDevSpaces;
+    private final CycleHandler cycleHandler;
+    private final Semaphore semaphoreCycle;
 
     public StorageSystem(Map<DeviceId, Integer> deviceTotalSlots,
                                 Map<ComponentId, DeviceId> componentPlacement)
@@ -37,6 +34,10 @@ public class StorageSystem implements cp2023.base.StorageSystem {
         // Maps:
         deviceCapacityMap = deviceTotalSlots;
         compInDevPlacement = componentPlacement;
+
+        cycleHandler = new CycleHandler(deviceTotalSlots);
+        semaphoreCycle = new Semaphore(1, true);
+
 
         isCompBeingTransfered = new HashMap<>();
         for(ComponentId compId : componentPlacement.keySet())
@@ -58,13 +59,7 @@ public class StorageSystem implements cp2023.base.StorageSystem {
             semaphoreQueueForDevSpaces.put(devId, new Semaphore(deviceTotalSlots.get(devId), true));
         }
 
-        cycleMap = new HashMap<>();
-        wasDevChecked = new HashMap<>();
-        for(DeviceId devId : deviceTotalSlots.keySet())
-        {
-            cycleMap.put(devId, new LinkedList<>());
-            wasDevChecked.put(devId, false);
-        }
+
 
         // deviceSpacesMap - dla danego device trzyma devSpaceHandler w ktorym jest mapa
         // trzymajaca informacje ktore miejsca na urzadzeniu (0,...,capacity-1) sa zajete/wolne
@@ -103,48 +98,6 @@ public class StorageSystem implements cp2023.base.StorageSystem {
         {
             System.out.println(e);
         }
-    }
-
-
-    private void checkCycles(DeviceId srcId, DeviceId destId, ComponentId compId)
-    {
-        for(DeviceId id : wasDevChecked.keySet())
-            wasDevChecked.put(id, false);
-
-        boolean foundCycle = false;
-        Pair<DeviceId, ComponentId> pair = new Pair<>(destId, compId);
-
-        cycleMap.get(srcId).add(pair);
-
-        for(DeviceId currDevId : wasDevChecked.keySet())
-        {
-            if(!wasDevChecked.get(currDevId))
-            {
-                DeviceId currDev = pair.getFirst();
-            }
-        }
-
-        if(cycleMap.get(srcId).equals(pair))
-        {
-
-//            while(true)
-//            {
-//                if(currDev == srcId)
-//                {
-//                    // cycle
-//                }
-//                else if(cycleMap.get(currDev).isEmpty())
-//                {
-//                    // no cycle
-//                    break;
-//                }
-//                else
-//                {
-//                    currDev = cycleMap.get(currDev).peek().getFirst();
-//                }
-//            }
-        }
-
     }
 
     private static TypeOfTransfer setTransferType(DeviceId srcDevId, DeviceId destDevId)
@@ -218,7 +171,7 @@ public class StorageSystem implements cp2023.base.StorageSystem {
             throw new ComponentIsBeingOperatedOn(compId);
     }
 
-    private void do_the_TRANSFER(ComponentTransfer transfer, Integer idxOfMySpace)
+    private void do_the_TRANSFER(ComponentTransfer transfer, Integer idxOfMySpace, Boolean isCycle)
             throws InterruptedException
     {
         DeviceId srcDevId, destDevId;
@@ -355,14 +308,46 @@ public class StorageSystem implements cp2023.base.StorageSystem {
                 }
                 case TRANSFER -> {
 
-                    semaphoreQueueForDevSpaces.get(destDevId).acquire();
+                    Integer idxOfMySpace;
 
-                    semaphoresDev.get(destDevId).acquire();
-                    Integer idxOfMySpace =
-                            deviceSpacesMap.get(destDevId).reserveSpace(compId);
-                    semaphoresDev.get(destDevId).release();
+                    semaphoreCycle.acquire();
 
-                    do_the_TRANSFER(transfer, idxOfMySpace);
+                    Pair<Boolean, ComponentId> isCycle_compAtDestDev =
+                            cycleHandler.cycleExist(srcDevId, destDevId, compId);
+
+                    // nie ma z nami cyklu to zwalniamy semafor i ustawiamy sie na kolejce czekania
+                    // na miejsce na urzadzenie
+                    if(!isCycle_compAtDestDev.first)
+                    {
+                        semaphoreCycle.release();
+                        semaphoreQueueForDevSpaces.get(destDevId).acquire();
+
+                        semaphoresDev.get(destDevId).acquire();
+                        idxOfMySpace =
+                                deviceSpacesMap.get(destDevId).reserveSpace(compId);
+                        semaphoresDev.get(destDevId).release();
+                    }
+                    else
+                    {
+                        semaphoresDev.get(destDevId).acquire();
+                        idxOfMySpace =
+                                deviceSpacesMap.get(destDevId).reserveSpaceCycle(compId,
+                                        isCycle_compAtDestDev.second);
+                        semaphoresDev.get(destDevId).release();
+                    }
+
+                    do_the_TRANSFER(transfer, idxOfMySpace, isCycle_compAtDestDev.first);
+
+                    // jesli cykl jest - czyli i tak bylibysmy pierwsi na kolejce po
+                    // miejsce na urzadzeniu, to omijamy acquire na tym semaforze (ma 0 permitow aktualnie)
+                    // i blokujemy reszte transferow dopoki cykl nie zostanie rozstrzygniety.
+                    // jesli bysmy nie zablokowali przychodzacych nowych transferow to moglby powstac
+                    // nowy cykl ale nigdy by nie zostal wykryty, bo zaden element kiedy sie sam dodawal
+                    // nie bylby pierwszy na swojej kolejce bo wczesniejszy cykl nie bylby jeszcze usuniety.
+
+
+
+
 
                     // Po skonczeniu perform zmieniamy w mapie przyporzadkowanie componentow do device
                     // i ustawiamy ze komponent nie jest juz transferowany

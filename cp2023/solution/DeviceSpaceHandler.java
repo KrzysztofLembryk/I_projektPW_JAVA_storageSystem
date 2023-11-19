@@ -7,9 +7,8 @@ import java.util.Map;
 import java.util.concurrent.Semaphore;
 
 public class DeviceSpaceHandler {
-    private Integer size;
+    private final Integer size;
     private Map<Integer, Pair<DevSpacesTypes, ComponentId>> mapOfDevSpaces;
-    private int howManyWaitingInQueue = 0;
     private Semaphore semaphoreWaitForReleased = new Semaphore(0, true);
     public DeviceSpaceHandler(Integer size)
     {
@@ -54,6 +53,19 @@ public class DeviceSpaceHandler {
         System.out.println("Jakims cudem devSpaceHandler return W reserveSpace po for sie zrobilo");
         return -1;
     }
+    public Integer reserveSpaceCycle(ComponentId myCompId, ComponentId destCompId)
+    {
+        for(int i = 0; i < size; i++) {
+            if(mapOfDevSpaces.get(i).second != null &&
+                    mapOfDevSpaces.get(i).second.equals(destCompId)){
+
+                mapOfDevSpaces.get(i).first = DevSpacesTypes.CYCLE_RESERVED;
+                mapOfDevSpaces.get(i).second = myCompId;
+                return i;
+            }
+        }
+        return -1;
+    }
     public void freeSpace(ComponentId compId) throws InterruptedException
     {
         // we free occupied space by us
@@ -62,9 +74,15 @@ public class DeviceSpaceHandler {
             if(mapOfDevSpaces.get(i).second != null &&
                     mapOfDevSpaces.get(i).second.equals(compId))
             {
-                mapOfDevSpaces.get(i).second = null;
-                mapOfDevSpaces.get(i).first = DevSpacesTypes.FREE;
-
+                if(mapOfDevSpaces.get(i).first != DevSpacesTypes.CYCLE_RESERVED)
+                {
+                    mapOfDevSpaces.get(i).second = null;
+                    mapOfDevSpaces.get(i).first = DevSpacesTypes.FREE;
+                }
+                else
+                {
+                    mapOfDevSpaces.get(i).first = DevSpacesTypes.OCCUPIED;
+                }
                 break;
             }
         }

@@ -3,22 +3,22 @@ package cp2023.solution;
 import cp2023.base.ComponentId;
 import cp2023.base.DeviceId;
 
-import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Semaphore;
 
 public class CycleHandler {
-    Map<DeviceId, Queue<Pair<DeviceId, ComponentId>>> srcToDestGraph;
+    // destDev_QueueSrcDevGraph - to kolejka trzymajaca dla danego destDev
+    // transfery z srcDev jakie chca na niego przyjsc w kolejnosci przychodzenia
+    Map<DeviceId, Queue<Pair<DeviceId, ComponentId>>> destDev_srcDevQueue;
     //Semaphore mutex = new Semaphore(1, true);
 
     public CycleHandler(Map<DeviceId, Integer> devices)
     {
-        srcToDestGraph = new ConcurrentHashMap<>();
+        destDev_srcDevQueue = new ConcurrentHashMap<>();
         for(DeviceId devId : devices.keySet())
-            srcToDestGraph.put(devId, new LinkedList<>());
+            destDev_srcDevQueue.put(devId, new LinkedList<>());
     }
     private void queue_pushBack(DeviceId srcDev, DeviceId destDev, ComponentId compId)
     {
@@ -26,48 +26,85 @@ public class CycleHandler {
         // those objects contents, and they would be deleted inside other functions too
         // need checking
         ComponentId copyCompId = new ComponentId(compId.hashCode());
-        DeviceId copyDestDev = new DeviceId(destDev.hashCode());
+        // jesli srcDev to null to mamy transfer ADD
+        DeviceId copySrcDev = null;
+        if(srcDev != null)
+             copySrcDev = new DeviceId(srcDev.hashCode());
 
-        srcToDestGraph.get(srcDev).add(new Pair<>(copyDestDev, copyCompId));
+        destDev_srcDevQueue.get(destDev).add(new Pair<>(copySrcDev, copyCompId));
     }
-    public void queue_removeFront(DeviceId srcDev, ComponentId compId)
+    public void queue_removeFront(DeviceId destDev, ComponentId compId)
     {
-        if(!srcToDestGraph.get(srcDev).isEmpty() &&
-                srcToDestGraph.get(srcDev).peek().second.equals(compId))
-            srcToDestGraph.get(srcDev).remove();
-    }
-
-    private boolean myselfFirstInQueue(DeviceId srcDev, ComponentId compId)
-    {
-        return srcToDestGraph.get(srcDev).peek().second.equals(compId);
+        if(!destDev_srcDevQueue.get(destDev).isEmpty() &&
+                destDev_srcDevQueue.get(destDev).peek().second.equals(compId))
+            destDev_srcDevQueue.get(destDev).remove();
     }
 
-    private Pair<Boolean, ComponentId> findCycle(DeviceId srcDev)
+    // this queue remove will be used in transfer REMOVE, cause remove doesnt know
+    // component that it is freeing space for.
+    public void queue_removeFront(DeviceId destDev)
     {
-        DeviceId currDev = srcDev;
+        if(!destDev_srcDevQueue.get(destDev).isEmpty())
+            destDev_srcDevQueue.get(destDev).remove();
+    }
+    private boolean myselfFirstInQueue(DeviceId destDev, ComponentId compId)
+    {
+        if(!destDev_srcDevQueue.get(destDev).isEmpty())
+            return destDev_srcDevQueue.get(destDev).peek().second.equals(compId);
+        return false;
+    }
+
+    private Pair<Boolean, ComponentId> findCycle(DeviceId destDev)
+    {
+        DeviceId currDev = destDev;
         do
         {
-            if(!srcToDestGraph.get(currDev).isEmpty())
+            if(!destDev_srcDevQueue.get(currDev).isEmpty())
             {
-                currDev = srcToDestGraph.get(currDev).peek().first;
+                currDev = destDev_srcDevQueue.get(currDev).peek().first;
+                // jesli po przejsciu po krawedzi mamy null to znaczy ze na
+                // destDev pierwszym czekajacym transferem jest ADD, a on nie
+                // bedzie w cyklu, wiec cyklu nie ma
+                if(currDev == null)
+                    return new Pair<>(false, new ComponentId(-1));
             }
             else
                 return new Pair<>(false, new ComponentId(-1));
-        }while(!currDev.equals(srcDev));
+        }while(!currDev.equals(destDev));
 
-        currDev = srcToDestGraph.get(srcDev).peek().first;
-        ComponentId compOnDest = srcToDestGraph.get(currDev).peek().second;
+        currDev = destDev_srcDevQueue.get(destDev).peek().first;
+        ComponentId compOnDest = destDev_srcDevQueue.get(currDev).peek().second;
 
         return new Pair<>(true, compOnDest);
+    }
+    private void removeCycle(DeviceId destDev)
+    {
+        DeviceId currDev = destDev_srcDevQueue.get(destDev).peek().first;
+        DeviceId tempDev;
+        do
+        {
+                tempDev = destDev_srcDevQueue.get(currDev).peek().first;
+                destDev_srcDevQueue.get(currDev).remove();
+                currDev = tempDev;
+
+        }while(!currDev.equals(destDev));
+
+        destDev_srcDevQueue.get(destDev).remove();
     }
 
     public Pair<Boolean, ComponentId> cycleExist(DeviceId srcDev, DeviceId destDev, ComponentId compId)
     {
         queue_pushBack(srcDev, destDev, compId);
-        if(myselfFirstInQueue(srcDev, compId))
+        if(myselfFirstInQueue(destDev, compId))
         {
-            Pair<Boolean, ComponentId> isCycle = findCycle(srcDev);
-
+            Pair<Boolean, ComponentId> isCycle = findCycle(destDev);
+            if(isCycle.first)
+            {
+                // jesli jest cykl to go usuwamy zeby nastepne transfery nie mialy
+                // starych informacji, bo po znalezieniu cyklu w execute zaczynamy go
+                // ogarniac
+                removeCycle(destDev);
+            }
             return isCycle;
         }
         return new Pair<>(false, new ComponentId(-1));
