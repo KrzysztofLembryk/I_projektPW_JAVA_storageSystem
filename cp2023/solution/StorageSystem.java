@@ -6,16 +6,14 @@ import cp2023.base.DeviceId;
 import cp2023.exceptions.*;
 
 import java.util.HashMap;
-import java.util.LinkedList;
 import java.util.Map;
-import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 
 public class StorageSystem implements cp2023.base.StorageSystem {
     // deviceTotalSlots - stores info about how many components
     // device of given ID can store (deviceID --> capacity).
-    private final Map<DeviceId, Integer> deviceCapacityMap;
+    private final Map<DeviceId, Integer> deviceTotalSlots;
     private final Map<ComponentId, DeviceId> compInDevPlacement;
     private final Map<ComponentId, Boolean> isCompBeingTransfered;
     private final Map<ComponentId, Semaphore> semaphoreComponentTransfer;
@@ -26,18 +24,36 @@ public class StorageSystem implements cp2023.base.StorageSystem {
     private final Semaphore semaphoreCheckTransfer;
     private final Map<DeviceId, SemaphoresDevSpacesHandler> semaphoresDevSpaces;
     private final Map<DeviceId, Semaphore> semaphoreQueueForDevSpaces;
-    private final CycleHandler cycleHandler;
-    private final Semaphore semaphoreCycle;
+    //private final CycleHandler cycleHandler;
+    private final Semaphore semaphoreGraph;
+    private Graph transferGraph;
+
+    private void initGraph()
+    {
+        Map<DeviceId, Integer> devFreeSpaces = new HashMap<>();
+        for(DeviceId dev : deviceTotalSlots.keySet())
+        {
+            devFreeSpaces.put(dev, deviceTotalSlots.get(dev));
+        }
+
+        for(ComponentId compId : compInDevPlacement.keySet())
+        {
+            DeviceId currDev = compInDevPlacement.get(compId);
+            Integer freeSpaces = devFreeSpaces.get(currDev);
+            devFreeSpaces.put(currDev, freeSpaces - 1);
+        }
+        transferGraph = new Graph(devFreeSpaces, semaphoreComponentTransfer);
+    }
 
     public StorageSystem(Map<DeviceId, Integer> deviceTotalSlots,
                                 Map<ComponentId, DeviceId> componentPlacement)
     {
         // Maps:
-        deviceCapacityMap = deviceTotalSlots;
+        this.deviceTotalSlots = deviceTotalSlots;
         compInDevPlacement = componentPlacement;
 
-        cycleHandler = new CycleHandler(deviceTotalSlots);
-        semaphoreCycle = new Semaphore(1, true);
+        //cycleHandler = new CycleHandler(deviceTotalSlots);
+        semaphoreGraph = new Semaphore(1, true);
 
         semaphoreComponentTransfer = new ConcurrentHashMap<>();
         isCompBeingTransfered = new HashMap<>();
@@ -60,8 +76,6 @@ public class StorageSystem implements cp2023.base.StorageSystem {
             semaphoreQueueForDevSpaces.put(devId, new Semaphore(deviceTotalSlots.get(devId), true));
         }
 
-
-
         // deviceSpacesMap - dla danego device trzyma devSpaceHandler w ktorym jest mapa
         // trzymajaca informacje ktore miejsca na urzadzeniu (0,...,capacity-1) sa zajete/wolne
         // i przez jakie komponenty sa one zajete.
@@ -73,12 +87,12 @@ public class StorageSystem implements cp2023.base.StorageSystem {
         semaphoresDevSpaces = new ConcurrentHashMap<>();
         try
         {
-            for(DeviceId devId : deviceCapacityMap.keySet())
+            for(DeviceId devId : this.deviceTotalSlots.keySet())
             {
-                Integer capacity = deviceCapacityMap.get(devId);
+                Integer capacity = this.deviceTotalSlots.get(devId);
                 semaphoresDevSpaces.put(devId, new SemaphoresDevSpacesHandler(capacity));
                 deviceSpacesMap.put(devId, new DeviceSpaceHandler(capacity));
-                System.out.println("storageConstructor: " + devId + ", capacity: " + capacity);
+                //System.out.println("storageConstructor: " + devId + ", capacity: " + capacity);
             }
 
             // zajmujemy miejsca na urzadzeniach i semaforach
@@ -94,6 +108,7 @@ public class StorageSystem implements cp2023.base.StorageSystem {
                 // na ktorym ustawiaja sie i czekaja transfery na miejsca
                 semaphoreQueueForDevSpaces.get(devId).acquire();
             }
+            initGraph();
         }
         catch(InterruptedException e)
         {
@@ -119,14 +134,14 @@ public class StorageSystem implements cp2023.base.StorageSystem {
     {
         if(transferType == TypeOfTransfer.ADD)
         {
-            if(!deviceCapacityMap.containsKey(destDevId))
+            if(!deviceTotalSlots.containsKey(destDevId))
                 throw new DeviceDoesNotExist(destDevId);
             if(compInDevPlacement.containsKey(compId))
                 throw new ComponentAlreadyExists(compId);
         }
         else if(transferType == TypeOfTransfer.REMOVE)
         {
-            if(!deviceCapacityMap.containsKey(srcDevId))
+            if(!deviceTotalSlots.containsKey(srcDevId))
                 throw new DeviceDoesNotExist(srcDevId);
             if(!compInDevPlacement.containsKey(compId) ||
                     !compInDevPlacement.get(compId).equals(srcDevId))
@@ -135,9 +150,9 @@ public class StorageSystem implements cp2023.base.StorageSystem {
         }
         else if(transferType == TypeOfTransfer.TRANSFER)
         {
-            if(!deviceCapacityMap.containsKey(srcDevId))
+            if(!deviceTotalSlots.containsKey(srcDevId))
                 throw new DeviceDoesNotExist(srcDevId);
-            if(!deviceCapacityMap.containsKey(destDevId))
+            if(!deviceTotalSlots.containsKey(destDevId))
                 throw new DeviceDoesNotExist(destDevId);
             if(!compInDevPlacement.containsKey(compId) ||
                     !compInDevPlacement.get(compId).equals(srcDevId))
@@ -172,7 +187,7 @@ public class StorageSystem implements cp2023.base.StorageSystem {
             throw new ComponentIsBeingOperatedOn(compId);
     }
 
-    private void do_the_TRANSFER(ComponentTransfer transfer, Integer idxOfMySpace, Boolean isCycle)
+    private void do_the_TRANSFER(ComponentTransfer transfer, Integer idxOfMySpace)
             throws InterruptedException
     {
         DeviceId srcDevId, destDevId;
@@ -216,9 +231,9 @@ public class StorageSystem implements cp2023.base.StorageSystem {
         // transfer typu remove mozemy od razu przygotowac, bo komponent ma juz
         // miejsce na urzadzeniu
 
-        semaphoreCycle.acquire();
+        semaphoreGraph.acquire();
 
-        cycleHandler.queue_removeFront(srcDevId);
+        //cycleHandler.queue_removeFront(srcDevId);
 
         semaphoresDev.get(srcDevId).acquire();
         // po prepare zwalniamy miejsce na urzadzeniu zeby ktos mogl juz je zajac
@@ -228,7 +243,7 @@ public class StorageSystem implements cp2023.base.StorageSystem {
 
         semaphoresDev.get(srcDevId).release();
 
-        semaphoreCycle.release();
+        semaphoreGraph.release();
 
         transfer.prepare();
 
@@ -278,17 +293,17 @@ public class StorageSystem implements cp2023.base.StorageSystem {
             switch (transferType) {
                 case ADD -> {
 
-                    semaphoreCycle.acquire();
-                    cycleHandler.cycleExist(srcDevId, destDevId, compId);
-                    semaphoreCycle.release();
+                    semaphoreGraph.acquire();
+                    //cycleHandler.cycleExist(srcDevId, destDevId, compId);
+                    semaphoreGraph.release();
 
                     // we wait for place on destDevice
                     semaphoreQueueForDevSpaces.get(destDevId).acquire();
 
                     // po otrzymaniu miejsca zwalniamy sie z kolejki oczekujacej na miejsce
-                    semaphoreCycle.acquire();
-                    cycleHandler.queue_removeFront(destDevId, compId);
-                    semaphoreCycle.release();
+                    semaphoreGraph.acquire();
+                    //cycleHandler.queue_removeFront(destDevId, compId);
+                    semaphoreGraph.release();
 
                     // Tylko jeden transfer w danej chwili moze miec przydzielane wolne miejsce
                     semaphoresDev.get(destDevId).acquire();
@@ -327,33 +342,25 @@ public class StorageSystem implements cp2023.base.StorageSystem {
 
                     Integer idxOfMySpace;
 
-                    semaphoreCycle.acquire();
+                    semaphoreGraph.acquire();
 
-                    Pair<Boolean, ComponentId> isCycle_compAtDestDev =
-                            cycleHandler.cycleExist(srcDevId, destDevId, compId);
+                    transferGraph.checkCycle(srcDevId, destDevId, compId);
+
+                    semaphoreGraph.release();
+
+                    semaphoreComponentTransfer.get(compId).acquire();
 
                     // nie ma z nami cyklu to zwalniamy semafor i ustawiamy sie na kolejce czekania
                     // na miejsce na urzadzenie
-                    if(!isCycle_compAtDestDev.first)
-                    {
-                        semaphoreCycle.release();
-                        semaphoreQueueForDevSpaces.get(destDevId).acquire();
 
-                        semaphoresDev.get(destDevId).acquire();
-                        idxOfMySpace =
-                                deviceSpacesMap.get(destDevId).reserveSpace(compId);
-                        semaphoresDev.get(destDevId).release();
-                    }
-                    else
-                    {
-                        semaphoresDev.get(destDevId).acquire();
-                        idxOfMySpace =
-                                deviceSpacesMap.get(destDevId).reserveSpaceCycle(compId,
-                                        isCycle_compAtDestDev.second);
-                        semaphoresDev.get(destDevId).release();
-                    }
+                    semaphoresDev.get(destDevId).acquire();
+                    idxOfMySpace =
+                            deviceSpacesMap.get(destDevId).reserveSpace(compId);
+                    semaphoresDev.get(destDevId).release();
 
-                    do_the_TRANSFER(transfer, idxOfMySpace, isCycle_compAtDestDev.first);
+
+
+                    do_the_TRANSFER(transfer, idxOfMySpace);
 
                     // jesli cykl jest - czyli i tak bylibysmy pierwsi na kolejce po
                     // miejsce na urzadzeniu, to omijamy acquire na tym semaforze (ma 0 permitow aktualnie)
