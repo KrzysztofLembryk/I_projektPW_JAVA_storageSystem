@@ -42,6 +42,10 @@ public class Node {
         }
         throw new Exception("Node - removeEdge - idx out of bounds");
     }
+    protected  boolean noTransfersToMe()
+    {
+        return vecTransfersToMe.size() == 0;
+    }
     protected DeviceId getDevId()
     {
         return devId;

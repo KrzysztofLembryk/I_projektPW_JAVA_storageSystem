@@ -11,14 +11,20 @@ import java.util.concurrent.Semaphore;
 
 public class Graph {
     private Map<DeviceId, Node> dev_nodes_map;
+    private Map<DeviceId, Integer> dev_freeSpaces;
     private final Map<ComponentId, Semaphore> semaphoreComponentTransfer;
-    public Graph(Map<DeviceId, Integer> devTotalSlots, Map<ComponentId, Semaphore> semaphoreComponentTransfer)
+    public Graph(Map<DeviceId, Integer> devFreeSlots, Map<ComponentId, Semaphore> semaphoreComponentTransfer)
     {
         this.semaphoreComponentTransfer = semaphoreComponentTransfer;
         dev_nodes_map = new HashMap<>();
+        dev_freeSpaces = new HashMap<>();
 
-        for(DeviceId dev : devTotalSlots.keySet())
+        for(DeviceId dev : devFreeSlots.keySet())
+        {
             dev_nodes_map.put(dev, new Node(dev));
+            dev_freeSpaces.put(dev, devFreeSlots.get(dev));
+        }
+
     }
 
     private boolean findCycle_dfs(Node currNode, Map<DeviceId, Boolean> visited,
@@ -95,44 +101,57 @@ public class Graph {
     {
         // zdejmujemy z grafu transfer o najwiekszym priorytecie na devId
         // tylko transfer typu REMOVE moze to zrobic bo zwalnia miejsce
-        try
+        if(dev_nodes_map.get(devId).noTransfersToMe())
         {
-            ComponentId compId = dev_nodes_map.get(devId).removeEdge(0);
-            semaphoreComponentTransfer.get(compId).release();
+         Integer freeSpaces = dev_freeSpaces.get(devId);
+         dev_freeSpaces.put(devId, freeSpaces + 1);
         }
-        catch(Exception e)
+        else
         {
-            System.out.println("Graph - freeSpaceOnDev - " + e);
-        }
-
-    }
-    public void checkCycle(DeviceId srcDev, DeviceId destDev, ComponentId compId)
-    {
-        // Uzyjemy algorytmu dfs do znalezienia cyklu w naszym grafie
-        Integer myIdx = addTransfer(srcDev, destDev, compId);
-        Map<DeviceId, Boolean> visited = new HashMap<>();
-        // potrzebujemy wiedziec jeszcze jaki indeks transferu jest w naszym cyklu
-        Map<DeviceId, Pair<Boolean, Integer>> recursionStack = new HashMap<>();
-
-        for(DeviceId dev : dev_nodes_map.keySet())
-        {
-            visited.put(dev, false);
-            recursionStack.put(dev, new Pair<>(false, 0));
-        }
-
-        if(findCycle_dfs(dev_nodes_map.get(destDev), visited, recursionStack, destDev, myIdx))
-        {
-            //System.out.println("JEST CYKL");
-            // jesli znajdziemy cykl to go usuwamy i wypuszczamy czekajce na semaforach transfery
             try
             {
-                removeCycle(recursionStack);
+                ComponentId compId = dev_nodes_map.get(devId).removeEdge(0);
+                semaphoreComponentTransfer.get(compId).release();
             }
             catch(Exception e)
             {
-                System.out.println("Graph - checkCycle - " + e);
+                System.out.println("Graph - freeSpaceOnDev - " + e);
             }
-            //System.out.println("Transfer domykajacy: " + srcDev + " -> " + destDev + ", komponentu: " + compId);
+        }
+    }
+    public void checkCycle(DeviceId srcDev, DeviceId destDev, ComponentId compId)
+    {
+        // jesli jest miejsce na urzadzeniu to nie dodajemy nic do grafu, tylko przepuszczamy
+        // ten transfer i zmniejszamy dostepne miejsce na destDev.
+        if(dev_freeSpaces.get(destDev) > 0)
+        {
+            Integer freeSpaces = dev_freeSpaces.get(destDev);
+            dev_freeSpaces.put(destDev, freeSpaces - 1);
+            semaphoreComponentTransfer.get(compId).release();
+        }
+        else {
+            // Nie ma miejsca na destDev, wiec
+            // Uzyjemy algorytmu dfs do znalezienia cyklu w naszym grafie
+            Integer myIdx = addTransfer(srcDev, destDev, compId);
+            Map<DeviceId, Boolean> visited = new HashMap<>();
+            // potrzebujemy wiedziec jeszcze jaki indeks transferu jest w naszym cyklu
+            Map<DeviceId, Pair<Boolean, Integer>> recursionStack = new HashMap<>();
+
+            for (DeviceId dev : dev_nodes_map.keySet()) {
+                visited.put(dev, false);
+                recursionStack.put(dev, new Pair<>(false, 0));
+            }
+
+            if (findCycle_dfs(dev_nodes_map.get(destDev), visited, recursionStack, destDev, myIdx)) {
+                //System.out.println("JEST CYKL");
+                // jesli znajdziemy cykl to go usuwamy i wypuszczamy czekajce na semaforach transfery
+                try {
+                    removeCycle(recursionStack);
+                } catch (Exception e) {
+                    System.out.println("Graph - checkCycle - " + e);
+                }
+                //System.out.println("Transfer domykajacy: " + srcDev + " -> " + destDev + ", komponentu: " + compId);
+            }
         }
 //        else
 //        {
