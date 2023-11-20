@@ -120,8 +120,7 @@ public class StorageSystem implements cp2023.base.StorageSystem {
     }
     private void isTransferOK(TypeOfTransfer transferType, ComponentId compId,
                               DeviceId srcDevId, DeviceId destDevId)
-            throws DeviceDoesNotExist, ComponentDoesNotNeedTransfer, ComponentAlreadyExists,
-            ComponentDoesNotExist, IllegalTransferType
+            throws TransferException
     {
         if(transferType == TypeOfTransfer.ADD)
         {
@@ -292,16 +291,10 @@ public class StorageSystem implements cp2023.base.StorageSystem {
         TypeOfTransfer transferType = setTransferType(srcDevId, destDevId);
 
         try {
-            try
-            {
                 semaphoreCheckTransfer.acquire();
                 isTransferOK(transferType, compId, srcDevId, destDevId);
                 checkIsCompBeingTransfered(compId, transferType);
-            }
-            finally
-            {
                 semaphoreCheckTransfer.release();
-            }
 
             semaphoreComponentTransfer.put(compId, new Semaphore(0, true));
 

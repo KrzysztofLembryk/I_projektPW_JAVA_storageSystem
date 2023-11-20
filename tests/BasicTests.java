@@ -8,7 +8,7 @@ import org.junit.jupiter.api.Test;
 public class BasicTests extends Generators {
 
     @Test
-    void RemoveFromFullDevice() throws TransferException {
+    void RemoveFromFullDevice() throws TransferException { // PASSED
         StorageSystem system = basicSystem3(2);
         UniqueCount count1 = new UniqueCount();
         ComponentTransfer transfer1 = transfer4(101, 1, -1, count1);
@@ -21,7 +21,7 @@ public class BasicTests extends Generators {
     @Test
         // ... https://moodle.mimuw.edu.pl/mod/forum/discuss.php?d=9224
         // Chciałbym serdecznie podziękować osobie, która zadała to ****** pytanie.
-    void noOvertakes() throws InterruptedException {
+    void noOvertakes() throws InterruptedException { // PASSED
         StorageSystem system = basicSystem2();
         UniqueCount callback = new UniqueCount();
         ComponentTransfer transfer = transfer2(101, 1, -1);
