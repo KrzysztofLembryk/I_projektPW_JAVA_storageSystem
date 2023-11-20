@@ -11,13 +11,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 
 public class StorageSystem implements cp2023.base.StorageSystem {
-    // deviceTotalSlots - stores info about how many components
-    // device of given ID can store (deviceID --> capacity).
     private final Map<DeviceId, Integer> deviceTotalSlots;
     private final Map<ComponentId, DeviceId> compInDevPlacement;
     private final Map<ComponentId, Boolean> isCompBeingTransfered;
     private final Map<ComponentId, Semaphore> semaphoreComponentTransfer;
-    // deviceSpacseMap - knows if there are free to use spaces on device or not
     private final Map<DeviceId, DeviceSpaceHandler> devSpacesHandlerMap;
     private final Map<DeviceId, Semaphore> semaphoresAccessDev;
     private final Semaphore semaphoreCheckTransfer;
@@ -150,7 +147,7 @@ public class StorageSystem implements cp2023.base.StorageSystem {
 
     }
 
-    private void checkIsCompBeingTransfered(ComponentId compId, TypeOfTransfer transferType)
+    private void checkIsCompBeingTransferred(ComponentId compId, TypeOfTransfer transferType)
             throws ComponentIsBeingOperatedOn {
         // wystarczy sprawdzic tylko typ transferu bo to czy jest dobry sprawdzilismy
         // juz we wczesniej wywolanej funkcji isTransferOK
@@ -242,7 +239,8 @@ public class StorageSystem implements cp2023.base.StorageSystem {
         semaphoreCheckTransfer.release();
     }
 
-    private void do_ADDING(ComponentTransfer transfer, Integer idxOfMySpace) throws InterruptedException {
+    private void do_ADDING(ComponentTransfer transfer, Integer idxOfMySpace)
+            throws InterruptedException {
         DeviceId destDevId = transfer.getDestinationDeviceId();
         ComponentId compId = transfer.getComponentId();
         // jesli dostalismy miejsce ok_to_reserve to znaczy ze ktos sie z niego
@@ -282,7 +280,7 @@ public class StorageSystem implements cp2023.base.StorageSystem {
         try {
             semaphoreCheckTransfer.acquire();
             isTransferOK(transferType, compId, srcDevId, destDevId);
-            checkIsCompBeingTransfered(compId, transferType);
+            checkIsCompBeingTransferred(compId, transferType);
             semaphoreCheckTransfer.release();
 
             semaphoreComponentTransfer.put(compId, new Semaphore(0, true));
@@ -327,57 +325,16 @@ public class StorageSystem implements cp2023.base.StorageSystem {
 
                     semaphoreComponentTransfer.get(compId).acquire();
 
-                    // nie ma z nami cyklu to zwalniamy semafor i ustawiamy sie na kolejce czekania
-                    // na miejsce na urzadzenie
-
                     semaphoresAccessDev.get(destDevId).acquire();
                     Integer idxOfMySpace =
                             devSpacesHandlerMap.get(destDevId).reserveSpace(compId);
                     semaphoresAccessDev.get(destDevId).release();
 
-
                     do_the_TRANSFER(transfer, idxOfMySpace);
-
                 }
-                case WRONG -> System.out.println("raczej nigdy tu nie wejdziemy :)");
             }
         } catch (InterruptedException e) {
             throw new RuntimeException("panic: unexpected thread interruption");
         }
-
-    }
-
-    public void printCompMapping() {
-        for (ComponentId id : compInDevPlacement.keySet())
-            System.out.println("Comp" + id + " : " + compInDevPlacement.get(id));
-    }
-
-    public static void test() {
-        Map<ComponentId, DeviceId> compInDevicePlacement = new HashMap<>();
-
-        ComponentId compID1 = new ComponentId(68);
-        ComponentId compID2 = new ComponentId(68);
-        DeviceId dev1 = new DeviceId(1);
-        compInDevicePlacement.put(compID1, dev1);
-
-
-        if (compInDevicePlacement.containsKey(compID2))
-            System.out.println("compID1 = compID2");
-        else
-            System.out.println("nie rownaja sie");
-
-        compInDevicePlacement.put(compID2, dev1);
-
-        for (ComponentId id : compInDevicePlacement.keySet()) {
-            if (id.compareTo(new ComponentId(68)) == 0)
-                System.out.println("istnieje compId 68");
-        }
-        System.out.println("map size: " + compInDevicePlacement.size());
-
-
-    }
-
-    public static void main(String[] args) {
-        StorageSystem.test();
     }
 }

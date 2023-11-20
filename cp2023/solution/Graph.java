@@ -150,7 +150,6 @@ public class Graph {
 
         removeEdgesOfCycle_createStack(recursionStack, cycleStack_srcToDest, vecCompToFree, startingDev);
 
-        //System.out.println("przed switchCompPlaces");
         switchCompPlacesOnDevices(cycleStack_srcToDest);
 
         // teraz uwalniamy semafory transferow jak juz maja miejsca na device ustalone
@@ -171,11 +170,8 @@ public class Graph {
         // tylko transfer typu REMOVE moze to zrobic bo zwalnia miejsce
         if(!currentNode.equals(nullNode) && currentNode.noTransfersToMe())
         {
-            //System.out.println("Nie ma transferu do " + devId + ", zwalniam miejsce");
             Integer freeSpaces = dev_freeSpaces.get(devId);
             dev_freeSpaces.put(devId, freeSpaces + 1);
-            freeSpaces = freeSpaces + 1;
-            //System.out.println("Zostalo " + freeSpaces + " wolnych miejsc");
 
          // jako ze zmieniamy na null i ktos w tym samym czasie moglby szukac miejsca
          // i nie znalezc a miejsce jest tak naprawde wolne, wiec musi byc s krytyczna.
@@ -189,8 +185,7 @@ public class Graph {
             try
             {
                 Pair<ComponentId, DeviceId> newComp_srcDev = currentNode.removeEdge(0);
-                //System.out.println("Jest czekajcy transfer: " + newComp_srcDev.second + " -> "+ devId  +
-                //        ", komponentu " + newComp_srcDev.first);
+
                 // tutaj nie musi byc sekcji krytycznej bo robimy zamiane, a componenty sa unikatowe
                 devSpacesHandlerMap.get(devId).reserveSpaceCycle(newComp_srcDev.first, compToRemove);
 
@@ -214,12 +209,9 @@ public class Graph {
         // na pierwsze wolne miejsce w devSpaces.
         if(dev_freeSpaces.get(destDev) > 0)
         {
-            //System.out.println("Zajmuje wolne miejsce na urzadzeniu " + destDev + " dla " + compId);
             // najpierw zajmujemy swoje miejsce
             Integer freeSpaces = dev_freeSpaces.get(destDev);
             dev_freeSpaces.put(destDev, freeSpaces - 1);
-            freeSpaces = freeSpaces - 1;
-            //System.out.println("Zostalo " + freeSpaces + " wolnych miejsc");
 
             semaphoresAccesDevice.get(destDev).acquire();
             devSpacesHandlerMap.get(destDev).reserveSpace(compId);
@@ -227,7 +219,6 @@ public class Graph {
 
             if(srcDev != null)
             {
-                //System.out.println("Zwalniam rekurencyjnie miejsca na srcDev: " + srcDev);
                 // teraz rekurencyjnie zwalniamy miejsca na srcDev
                 freeSpaceOnDev(srcDev, compId);
             }
@@ -236,8 +227,6 @@ public class Graph {
             semaphoreComponentTransfer.get(compId).release();
         }
         else {
-            //System.out.println("brak miejsca na urzadzeniu: " + destDev + " dla komponentu " + compId);
-            //System.out.printf("Sprawdzam czy jest cykl: ");
             // Nie ma miejsca na destDev, wiec
             // Uzyjemy algorytmu dfs do znalezienia cyklu w naszym grafie
             Integer myIdx = addTransfer(srcDev, destDev, compId);
@@ -253,7 +242,6 @@ public class Graph {
             }
 
             if (findCycle_dfs(dev_nodes_map.get(destDev), visited, recursionStack, destDev, myIdx)) {
-                //System.out.println("JEST CYKL");
                 // jesli znajdziemy cykl to go usuwamy i wypuszczamy czekajce na semaforach transfery
                 try {
                     removeCycle(recursionStack, destDev);
@@ -261,17 +249,7 @@ public class Graph {
                 catch (Exception e) {
                     System.out.println("Graph - checkCycle - " + e);
                 }
-                //System.out.println("Transfer domykajacy: " + srcDev + " -> " + destDev +
-                //        ", komponentu: " + compId);
-                //System.out.println();
             }
-//            else
-//            {
-//                System.out.println("NIE MA CYKLU");
-//                System.out.println("Dodalem transfer: " + srcDev + " -> " + destDev +
-//                        ", komponentu: " + compId);
-//                System.out.println();
-//            }
         }
     }
 

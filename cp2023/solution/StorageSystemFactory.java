@@ -79,9 +79,6 @@ public final class StorageSystemFactory {
         areArgumentsCorrect(deviceTotalSlots, componentPlacement);
 
         return new cp2023.solution.StorageSystem(deviceTotalSlots, componentPlacement);
-
-        // FIXME: implement
-        //throw new RuntimeException("not implemented");
     }
 
 }

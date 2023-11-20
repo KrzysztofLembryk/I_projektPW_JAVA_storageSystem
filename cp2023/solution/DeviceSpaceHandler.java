@@ -55,8 +55,8 @@ public class DeviceSpaceHandler {
                 return i;
             }
         }
-        // this return will never happen but java doesn't know that
-        System.out.println("Jakims cudem devSpaceHandler return W reserveSpace po for sie zrobilo");
+        // Tutaj nigdy nie wejdziemy, ale java o tym nie wie wiec musimy
+        // cos zwracac.
         return -1;
     }
     public Integer reserveSpaceCycle(ComponentId newCompId, ComponentId oldCompId)
