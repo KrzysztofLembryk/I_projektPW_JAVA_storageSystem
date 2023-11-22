@@ -1,5 +1,9 @@
 package cp2023.solution;
 
+/**
+ * Klasa Para, gdyz defaultowo java nie ma tej klasy,
+ * a jest ona potrzebna do zwracania wiecej niz jednego argumentu.
+ */
 public class Pair <T1, T2>{
     T1 first;
     T2 second;

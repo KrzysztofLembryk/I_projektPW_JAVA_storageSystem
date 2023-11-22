@@ -6,6 +6,17 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 
+/**
+ * Klasa SemaphoresDevSpacesHandler jest odpowiednikiem klasy DevSpaceHandler
+ * rezerwujacej miejsca, tylko ze tutaj robimy albo acquire na semaforze
+ * dla danego miejsca, albo release na tym semaforze.
+ *
+ * Potrzebujemy semaforow na kazde miejsce na danym urzadzeniu, gdyz dzieki
+ * temu wiemy kiedy transfer zrobil swoje prepare(). Bo po zrobieniu
+ * prepare() storage system robi release na semaforze zajmowanym przez
+ * transferowany komponent i dzieki temu inny transfer robi acquire tego miejsca
+ * i moze zaczac wykonywac swoje perform.
+ */
 public class SemaphoresDevSpacesHandler{
     private final Integer size;
     private final ComponentId freeSpace = new ComponentId(Integer.MIN_VALUE);
