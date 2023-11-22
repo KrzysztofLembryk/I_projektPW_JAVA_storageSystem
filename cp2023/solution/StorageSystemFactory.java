@@ -18,29 +18,45 @@ import cp2023.base.StorageSystem;
 public final class StorageSystemFactory {
     private static void isDeviceMapCorrect(Map<DeviceId, Integer> deviceTotalSlots) throws IllegalArgumentException
     {
+        for(DeviceId dev : deviceTotalSlots.keySet())
+        {
+            if(dev == null)
+                throw new IllegalArgumentException("StorageSystemFactory - newSystem - " +
+                        "device in devTotalSlots is null");
+        }
         // Sprawdzamy czy jakies urzadzenie ma zerowa pojemnosc, jesli takie urzadzenie
         // istnieje to rzucamy illegalArgException.
         if(deviceTotalSlots.isEmpty())
-            throw new IllegalArgumentException("StorageSystemFactory - newSystem - areArgsCorrect - " +
-                    "isDeviceMapCorrect - map is empty");
+            throw new IllegalArgumentException("StorageSystemFactory - newSystem - " +
+                    "device map is empty");
 
         for(Integer capacity : deviceTotalSlots.values())
-            if(capacity == 0)
-                throw new IllegalArgumentException("StorageSystemFactory - newSystem - areArgsCorrect - " +
-                        "isDeviceMapCorrect - capacity of a device is 0");
+            if(capacity == null || capacity == 0)
+                throw new IllegalArgumentException("StorageSystemFactory - newSystem - " +
+                        "wrong capacity of a device");
 
     }
     private static void isComponentMapCorrect(Map<DeviceId, Integer> devTotalSlots,
                                               Map<ComponentId, DeviceId> compPlacement)
             throws IllegalArgumentException
     {
+        for(ComponentId comp : compPlacement.keySet())
+        {
+            if(comp == null)
+                throw new IllegalArgumentException("StorageSystemFactory - newSystem - " +
+                        "exists null component");
+        }
         // Sprawdzamy czy wyjsciowe przyporzadkowanie komponentow do device jest poprawne,
         // czyli czy komponenty sa na device ktore istnieja w naszym systemie.
         for(DeviceId devID : compPlacement.values())
         {
+            if(devID == null)
+                throw new IllegalArgumentException("StorageSystemFactory - newSystem - " +
+                        "component is on null device");
+
             if(!devTotalSlots.containsKey(devID))
-                throw new IllegalArgumentException("StorageSystemFactory - newSystem - areArgsCorrect - " +
-                        "isComponentMapCorrect - there exists a component with assigned deviceID that does not exist");
+                throw new IllegalArgumentException("StorageSystemFactory - newSystem - " +
+                        "there exists a component with assigned deviceID that does not exist");
         }
     }
     private static void areThereTooManyComponentsOnDevice(Map<DeviceId, Integer> deviceTotalSlots,
@@ -70,7 +86,7 @@ public final class StorageSystemFactory {
             Integer currentNumberOfDevices = howManyComponentsOnDevices.get(id);
 
             if (currentNumberOfDevices > maxNumberOfDevices)
-                throw new IllegalArgumentException("StorageSystemFactory - newSystem - areArgsCorrect - " +
+                throw new IllegalArgumentException("StorageSystemFactory - newSystem - " +
                         "number of components on device exceeds device's limit");
         }
     }

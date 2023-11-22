@@ -11,7 +11,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 
 public class StorageSystem implements cp2023.base.StorageSystem {
-    private final Map<DeviceId, Integer> deviceTotalSlots;
+    private final Map<DeviceId, Integer> devTotalSlots;
     private final Map<ComponentId, DeviceId> compInDevPlacement;
     private final Map<ComponentId, Boolean> isCompBeingTransfered;
     private final Map<ComponentId, Semaphore> semaphoreComponentTransfer;
@@ -24,8 +24,8 @@ public class StorageSystem implements cp2023.base.StorageSystem {
 
     private void initGraph() {
         Map<DeviceId, Integer> devFreeSpaces = new HashMap<>();
-        for (DeviceId dev : deviceTotalSlots.keySet()) {
-            devFreeSpaces.put(dev, deviceTotalSlots.get(dev));
+        for (DeviceId dev : devTotalSlots.keySet()) {
+            devFreeSpaces.put(dev, devTotalSlots.get(dev));
         }
 
         for (ComponentId compId : compInDevPlacement.keySet()) {
@@ -39,17 +39,34 @@ public class StorageSystem implements cp2023.base.StorageSystem {
 
     public StorageSystem(Map<DeviceId, Integer> deviceTotalSlots,
                          Map<ComponentId, DeviceId> componentPlacement) {
-        this.deviceTotalSlots = deviceTotalSlots;
-        compInDevPlacement = componentPlacement;
+        // Tworzymy nowa hashmape przechowujaca urzadzenia i ich pojemnosci
+        // i robimy deep copy calej mapy deviceTotalSlots, gdyz systemy maja
+        // dzialac niezaleznie. Wiec nie chcemy przechowywac oryginalu, gdyz
+        // inny system jakos moglby go zmienic w trakcie dzialania tego sytemu.
+        // Analogiczne deep copy robimy dla mapy componentPlacement.
+        this.devTotalSlots = new HashMap<>();
+        for(DeviceId dev : deviceTotalSlots.keySet())
+        {
+            Integer val = deviceTotalSlots.get(dev);
+            this.devTotalSlots.put(new DeviceId(dev.hashCode()), val);
+        }
 
-        // Jednoczesnie z grafu moze korzystac jeden transfer i sprawdzac cykl.
+        this.compInDevPlacement = new HashMap<>();
+        for(ComponentId comp : componentPlacement.keySet())
+        {
+            DeviceId dev = new DeviceId(componentPlacement.get(comp).hashCode());
+            compInDevPlacement.put(new ComponentId(comp.hashCode()), dev);
+        }
+
+        // Jednoczesnie z grafu moze korzystac jeden transfer i sprawdzac cykl
+        // wiec potrzebujemy na to semafora.
         semaphoreGraph = new Semaphore(1, true);
 
-        // Kazdy komponent ma swoj semafor.
+        // Kazdy komponent ma swoj semafor na ktorym bedzie czekac jesli nie ma miejsca.
         semaphoreComponentTransfer = new ConcurrentHashMap<>();
 
+        // Mapa sprawdzajaca czy dany komponent jest aktualnie transferowany.
         isCompBeingTransfered = new HashMap<>();
-
         for (ComponentId compId : componentPlacement.keySet())
             isCompBeingTransfered.put(compId, false);
 
@@ -58,7 +75,6 @@ public class StorageSystem implements cp2023.base.StorageSystem {
 
         // semaphoresDev - mapa semaforow ktore pilnuja dostepu do devices, z permit=1.
         semaphoresAccessDev = new ConcurrentHashMap<>();
-
         for (DeviceId devId : deviceTotalSlots.keySet()) {
             semaphoresAccessDev.put(devId, new Semaphore(1, true));
         }
@@ -74,8 +90,8 @@ public class StorageSystem implements cp2023.base.StorageSystem {
         semaphoresDevSpaces = new ConcurrentHashMap<>();
 
         try {
-            for (DeviceId devId : this.deviceTotalSlots.keySet()) {
-                Integer capacity = this.deviceTotalSlots.get(devId);
+            for (DeviceId devId : this.devTotalSlots.keySet()) {
+                Integer capacity = this.devTotalSlots.get(devId);
                 semaphoresDevSpaces.put(devId, new SemaphoresDevSpacesHandler(capacity));
                 devSpacesHandlerMap.put(devId, new DeviceSpaceHandler(capacity));
             }
@@ -113,7 +129,7 @@ public class StorageSystem implements cp2023.base.StorageSystem {
     {
         if (transferType == TypeOfTransfer.ADD) {
             // Nie ma device na ktore chcemy dodac komponent.
-            if (!deviceTotalSlots.containsKey(destDevId))
+            if (!devTotalSlots.containsKey(destDevId))
                 throw new DeviceDoesNotExist(destDevId);
 
             // Komponent juz istnieje w systemie.
@@ -122,7 +138,7 @@ public class StorageSystem implements cp2023.base.StorageSystem {
         }
         else if (transferType == TypeOfTransfer.REMOVE) {
             // Nie ma device z ktorego chcemy usunac komponent.
-            if (!deviceTotalSlots.containsKey(srcDevId))
+            if (!devTotalSlots.containsKey(srcDevId))
                 throw new DeviceDoesNotExist(srcDevId);
 
             // Nie ma komponentu ktory chcemy usunac lub nie ma go
@@ -133,9 +149,9 @@ public class StorageSystem implements cp2023.base.StorageSystem {
         }
         else if (transferType == TypeOfTransfer.TRANSFER) {
             // Brak srcDev lub destDev w mapie dostepnych urzadzen.
-            if (!deviceTotalSlots.containsKey(srcDevId))
+            if (!devTotalSlots.containsKey(srcDevId))
                 throw new DeviceDoesNotExist(srcDevId);
-            if (!deviceTotalSlots.containsKey(destDevId))
+            if (!devTotalSlots.containsKey(destDevId))
                 throw new DeviceDoesNotExist(destDevId);
 
             // Podany komponent nie istnieje lub istnieje
