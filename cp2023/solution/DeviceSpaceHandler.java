@@ -7,9 +7,21 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 
+/** Klasa DeviceSpaceHandler zarzadza przydzielaniem miejsc (indeksow miejsc)
+ * na urzadzeniach komponentom. Jesli istnieje wolne miejsce to przydzielane
+ * jest pierwsze znalezione wolne miejsce. Jesli komponent ma zajac miejsce
+ * innego komponentu to miejsce nie jest zwalniane tylko nowy komponent
+ * jest wpisywany na miejsce starego
+*/
 public class DeviceSpaceHandler {
     private final Integer size;
+
+    // Tworzymy specjalny komponent oznaczajacy wolne miejsce. Zakladam,
+    // ze nie bedzie komponentu o indeksie Integer.Min_Val.
     private final ComponentId freeSpace = new ComponentId(Integer.MIN_VALUE);
+
+    // W MapOfDevSpaces na poczatku inicjalizujemy przez wlozenie size
+    // elementow typu freeSpace (indeksy miejsc sa 0...size-1).
     private Map<Integer, ComponentId> mapOfDevSpaces;
     public DeviceSpaceHandler(Integer size)
     {
@@ -18,8 +30,6 @@ public class DeviceSpaceHandler {
 
         for(int i = 0; i < size; i++)
         {
-            // I assume that devices ids are positive numbers, so Integer Min_Val
-            // means that slot is free
             mapOfDevSpaces.put(i,  freeSpace);
         }
 
