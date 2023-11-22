@@ -18,7 +18,8 @@ import cp2023.base.StorageSystem;
 public final class StorageSystemFactory {
     private static void isDeviceMapCorrect(Map<DeviceId, Integer> deviceTotalSlots) throws IllegalArgumentException
     {
-        // we check if any device has 0 capacity, if such device exist we throw exception
+        // Sprawdzamy czy jakies urzadzenie ma zerowa pojemnosc, jesli takie urzadzenie
+        // istnieje to rzucamy illegalArgException.
         if(deviceTotalSlots.isEmpty())
             throw new IllegalArgumentException("StorageSystemFactory - newSystem - areArgsCorrect - " +
                     "isDeviceMapCorrect - map is empty");
@@ -33,6 +34,8 @@ public final class StorageSystemFactory {
                                               Map<ComponentId, DeviceId> compPlacement)
             throws IllegalArgumentException
     {
+        // Sprawdzamy czy wyjsciowe przyporzadkowanie komponentow do device jest poprawne,
+        // czyli czy komponenty sa na device ktore istnieja w naszym systemie.
         for(DeviceId devID : compPlacement.values())
         {
             if(!devTotalSlots.containsKey(devID))
@@ -44,18 +47,24 @@ public final class StorageSystemFactory {
                                                           Map<ComponentId, DeviceId> componentPlacement)
             throws IllegalArgumentException
     {
+        // Zliczamy ile jest komponentow na danym device i sprawdzamy czy
+        // liczba komponentow nie przekracza device capacity. Wykonujemy
+        // te funkcje po wykonaniu dwoch poprzednich funkcji sprawdzajacych
+        // poprawnosc danych wiec wiemy ze komponenty sa przyporzadkowane
+        // do istniejacych device i ze zadne device capacity != 0.
         Map<DeviceId, Integer> howManyComponentsOnDevices = new HashMap<>();
 
         for(DeviceId deviceID : deviceTotalSlots.keySet())
             howManyComponentsOnDevices.put(deviceID, 0);
 
-        // we count how many components is currently on each device
+        // Zliczamy liczbe elementow na device.
         for(DeviceId id : componentPlacement.values())
         {
             Integer val = howManyComponentsOnDevices.get(id);
             howManyComponentsOnDevices.put(id, val + 1);
         }
-        // we check if current number of components on device is <= maxNnbrOfComponents on device
+
+        // Sprawdzamy czy liczba elem na device <= capacity.
         for(DeviceId id : deviceTotalSlots.keySet()) {
             Integer maxNumberOfDevices = deviceTotalSlots.get(id);
             Integer currentNumberOfDevices = howManyComponentsOnDevices.get(id);
