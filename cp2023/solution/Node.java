@@ -57,7 +57,7 @@ public class Node {
      * Po usunieciu krawedzi, zwracamy z jakiego srcDev ona szla i jaki komponent
      * chciala transferowac.
      */
-    protected  Pair<ComponentId, DeviceId> removeEdge(int priority) throws Exception
+    protected  Pair<ComponentId, DeviceId> removeEdge(int priority)
     {
         if(priority < vecTransfersToMe.size() && priority >= 0)
         {
@@ -68,7 +68,7 @@ public class Node {
 
             return new Pair<>(compId, srcDev);
         }
-        throw new Exception("Node - removeEdge - idx out of bounds");
+        return new Pair<>(null, null);
     }
     protected  boolean noTransfersToMe()
     {

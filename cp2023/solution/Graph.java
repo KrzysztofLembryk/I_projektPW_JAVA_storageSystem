@@ -146,7 +146,7 @@ public class Graph {
     private void removeEdgesOfCycle_createStack(Map<DeviceId, Pair<Boolean, Integer>> recursionStack,
                                                 Stack<Pair<DeviceId, ComponentId>> cycleStack_srcToDest,
                                                 Vector<ComponentId> vecCompToFree,
-                                                DeviceId startingDev) throws Exception
+                                                DeviceId startingDev)
     {
         DeviceId currDev = startingDev;
         do{
@@ -199,7 +199,7 @@ public class Graph {
     }
 
     private void removeCycle(Map<DeviceId, Pair<Boolean, Integer>> recursionStack,
-                             DeviceId startingDev) throws Exception
+                             DeviceId startingDev)
     {
         Stack<Pair<DeviceId, ComponentId>> cycleStack_srcToDest = new Stack<>();
         Vector<ComponentId> vecCompToFree = new Vector<>();
@@ -255,8 +255,7 @@ public class Graph {
         // zwolnione miejsce i usuwamy krawedz wpuszczonego transferu.
         else if(!currentNode.noTransfersToMe())
         {
-            try
-            {
+
                 Pair<ComponentId, DeviceId> newComp_srcDev = currentNode.removeEdge(0);
 
                 // Tutaj nie musi byc sekcji krytycznej, bo robimy zamiane miejsc dwoch komponentow,
@@ -271,11 +270,6 @@ public class Graph {
                 // Zwalniamy rekurnecyjnie reszte najdluzej czekajacych transferow, cofajac
                 // sie do srcDev.
                 freeSpaceOnDev(newComp_srcDev.second, newComp_srcDev.first);
-            }
-            catch(Exception e)
-            {
-                System.out.println("Graph - freeSpaceOnDev - " + e);
-            }
         }
     }
 
@@ -320,13 +314,9 @@ public class Graph {
             }
 
             if (findCycle_dfs(dev_nodes_map.get(destDev), visited, recursionStack, destDev, myIdx)) {
+
                 // Jesli znajdziemy cykl to go usuwamy i wypuszczamy czekajce na semaforach transfery.
-                try {
-                    removeCycle(recursionStack, destDev);
-                }
-                catch (Exception e) {
-                    System.out.println("Graph - checkCycle - " + e);
-                }
+                removeCycle(recursionStack, destDev);
             }
             // Jesli nie ma cyklu to aktualny transfer zawiesi sie na semaforze
             // transferowanego przez niego komponentu.
