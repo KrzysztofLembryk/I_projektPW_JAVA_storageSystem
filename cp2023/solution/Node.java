@@ -6,16 +6,28 @@ import cp2023.base.DeviceId;
 import java.util.Vector;
 import java.util.concurrent.Semaphore;
 
+/**
+ * Klasa Node przechowuje wierzcholek grafu, w ktorym szukamy
+ * czy istnieja zacyklone transfery.
+ *
+ * Dany Node reprezentuje urzadzenie w naszym systemie i przechowuje
+ * wektor Nodeow z ktorych ida transfery do tego Node'a (czyli urzadzenia).
+ *
+ * Klasa Node przechowuje rowniez wektor komponentow, ktore chca byc na
+ * Node transferowane.
+ *
+ * Mamy odpowiedniosc: element na miejscu i-tym w wektorze komponentow, jest
+ * transferowany z Node'a i-tego w wektorze Node'ow.
+ *
+ * Czyli w danym Node trzymamy krawedzie skierowane przychodzace do Node'a.
+ *
+ * Najwiekszy priorytet ma krawedz (transfer) na miejscu 0 w wektorach.
+ *
+ */
 public class Node {
     private final DeviceId devId;
-    // wektor czekajacych na miejsce na devId transferow
-    // gdzie transfer na msc 0 ma najwiekszy priorytet
-    private Vector<Node> vecTransfersToMe;
-    // nie mozemy miec wektora semaforow tutaj, ale bedziemy miec wektor
-    // komponentow gdzie na i=0 mamy transfer dla danego komponentu o
-    // najwiekszym priorytecie, na zewnatrz Node'a bedziemy miec mape semaforow
-    // dla danego komponentu z liczba wejsc 0.
-    private Vector<ComponentId> vecComponentsPriorities;
+    private final Vector<Node> vecTransfersToMe;
+    private final Vector<ComponentId> vecComponentsPriorities;
     public Node(DeviceId id)
     {
         devId = id;
@@ -23,22 +35,36 @@ public class Node {
         vecComponentsPriorities = new Vector<>();
     }
 
+    /**
+     * Zeby dodac krawedz (transfer) idaca do naszego Node'a (urzadzenia),
+     * potrzebujemy znac Node source'owy i jaki komponent tranfserujemy
+     * z tego source'owego Node'a. Dodajemy te elementy na koniec wektora,
+     * gdyz przyszly one pozniej niz wczesniej dodane elementy, wiec maja
+     * mniejszy priorytet.
+     */
     protected Integer addEdge(Node n, ComponentId comp)
     {
         vecTransfersToMe.add(n);
         vecComponentsPriorities.add(comp);
-        // po dodaniu krawedzi zwracamy indeks gdzie ta krawedz jest
-        // czyli jaki ma priorytet
+
         return vecTransfersToMe.size() - 1;
     }
-    protected  Pair<ComponentId, DeviceId> removeEdge(int idx) throws Exception
+
+    /**
+     * Usuwamy krawedz wchodzaca do Node'a o podanym priorytecie , gdyz moglismy
+     * znalezc cykl ktory zawiera transfery o nie najwiekszych priorytetach.
+     *
+     * Po usunieciu krawedzi, zwracamy z jakiego srcDev ona szla i jaki komponent
+     * chciala transferowac.
+     */
+    protected  Pair<ComponentId, DeviceId> removeEdge(int priority) throws Exception
     {
-        if(idx < vecTransfersToMe.size() && idx >= 0)
+        if(priority < vecTransfersToMe.size() && priority >= 0)
         {
-            DeviceId srcDev = vecTransfersToMe.get(idx).getDevId();
-            vecTransfersToMe.remove(idx);
-            ComponentId compId = vecComponentsPriorities.get(idx);
-            vecComponentsPriorities.remove(idx);
+            DeviceId srcDev = vecTransfersToMe.get(priority).getDevId();
+            vecTransfersToMe.remove(priority);
+            ComponentId compId = vecComponentsPriorities.get(priority);
+            vecComponentsPriorities.remove(priority);
 
             return new Pair<>(compId, srcDev);
         }
