@@ -52,25 +52,39 @@ public class DeviceSpaceHandler {
     public Integer reserveSpace(ComponentId compId)
             throws InterruptedException
     {
-        // najpierw sprawdzamy czy juz nie mamy miejsca w destdev
-        // moglo sie tak zdarzyc gdy byl cykl
+        // Najpierw sprawdzamy czy podany komponent nie ma
+        // juz zarezerwowanego miejsca na urzadzeniu, moglo sie
+        // tak zdarzyc gdy byl cykl.
         for(int i = 0; i < size; i++) {
             if (mapOfDevSpaces.get(i).equals(compId)) {
                 return i;
             }
         }
+        // Znajdujemy pierwsze wolne miejsce, wpisujemy sie
+        // i zwracamy jego indeks.
         for(int i = 0; i < size; i++) {
             if (mapOfDevSpaces.get(i).equals(freeSpace)) {
                 mapOfDevSpaces.put(i, compId);
                 return i;
             }
         }
-        // Tutaj nigdy nie wejdziemy, ale java o tym nie wie wiec musimy
-        // cos zwracac.
+        // Nigdy nie powinnismy wykonac tego returna, jesli
+        // wszystko jest zaimplementowane poprawnie, gdyz
+        // jesli nie ma miejsca to czekamy na semaforze,
+        // a wywolujemy reserveSpace tylko gdy wiemy ze
+        // jest jakies wolne miejsce.
         return -1;
     }
+
+    /**
+     *  reserveSpaceCycle wykonujemy tylko podczas szukania cyklu;
+     *  zamiast szukac pierwszego wolnego miejsca, to zajmujemy to,
+     *  ktore do tej pory zajmowal element na destDev do ktorego
+     *  transferujemy nasz element.
+     */
     public Integer reserveSpaceCycle(ComponentId newCompId, ComponentId oldCompId)
     {
+
         for(int i = 0; i < size; i++) {
             if(mapOfDevSpaces.get(i).equals(oldCompId)){
                 mapOfDevSpaces.put(i, newCompId);
@@ -81,7 +95,7 @@ public class DeviceSpaceHandler {
     }
     public void freeSpace(ComponentId compId)
     {
-        // we free occupied space by us
+        // Zwalniamy miejsce zajmowane przez nasz element.
         for(int i = 0; i < size; i++)
         {
             if(mapOfDevSpaces.get(i).equals(compId))
